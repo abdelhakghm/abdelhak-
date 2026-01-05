@@ -62,47 +62,50 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose}></div>
       
-      <div className="w-full max-w-xl premium-card rounded-[48px] p-12 shadow-2xl relative z-10 animate-modal">
-        <div className="flex items-center justify-between mb-12">
+      <div className="w-full max-w-xl glass rounded-t-[40px] sm:rounded-[32px] p-8 pb-12 sm:pb-8 shadow-2xl relative z-10 animate-bottom-sheet sm:animate-modal">
+        {/* Mobile Handle */}
+        <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-6 sm:hidden"></div>
+
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-3xl font-extrabold tracking-tighter text-white capitalize">{type} Specification</h2>
-            <p className="text-slate-500 text-sm mt-1">Registering value to the unified ledger.</p>
+            <h2 className="text-2xl font-extrabold tracking-tighter text-white capitalize">{type}</h2>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Transaction Ledger</p>
           </div>
-          <button onClick={onClose} className="w-12 h-12 glass rounded-2xl text-slate-500 hover:text-white transition-colors flex items-center justify-center">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+          <button onClick={onClose} className="w-10 h-10 glass rounded-xl text-slate-500 hover:text-white transition-colors flex items-center justify-center interactive-active">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-10">
-          <div className="space-y-4">
-            <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 ml-1">Quantum (DA)</label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Magnitude (DA)</label>
             <input 
               required type="number" step="0.01" placeholder="0.00"
-              className="w-full h-24 glass border-white/10 rounded-[32px] px-10 text-5xl font-black text-white outline-none focus:ring-4 focus:ring-blue-500/20 transition-all placeholder:text-slate-800 tracking-tighter"
+              className="w-full h-20 glass border-white/10 rounded-2xl px-6 text-4xl font-black text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-800 tracking-tighter"
               value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})}
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {type === 'income' && (
-              <div className="space-y-3 col-span-2">
+              <div className="space-y-2 col-span-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Asset Source</label>
-                <input required type="text" placeholder="Consulting, Equity, etc." className="w-full h-16 glass rounded-2xl px-6 text-white outline-none border-white/5" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} />
+                <input required type="text" placeholder="Consulting, Salary, etc." className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} />
               </div>
             )}
 
             {type === 'expense' && (
               <>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Capital Destination</label>
-                  <input required type="text" placeholder="Vendor or Service" className="w-full h-16 glass rounded-2xl px-6 text-white outline-none border-white/5" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  <input required type="text" placeholder="Service / Vendor" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Fiscal Category</label>
-                  <select className="w-full h-16 glass rounded-2xl px-6 text-white outline-none border-white/5 appearance-none bg-slate-900" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                  <select className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 appearance-none bg-slate-900" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
                     <option>Lifestyle</option><option>Vitals</option><option>Fixed Assets</option><option>Infrastructure</option><option>Misc</option>
                   </select>
                 </div>
@@ -111,33 +114,35 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
 
             {type === 'debt' && (
               <>
-                <div className="space-y-3 col-span-2">
+                <div className="space-y-2 col-span-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Legal Name</label>
-                  <input required type="text" placeholder="Individual or Institution" className="w-full h-16 glass rounded-2xl px-6 text-white outline-none border-white/5" value={formData.person_name} onChange={e => setFormData({...formData, person_name: e.target.value})} />
+                  <input required type="text" placeholder="Individual or Institution" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.person_name} onChange={e => setFormData({...formData, person_name: e.target.value})} />
                 </div>
-                <div className="grid grid-cols-2 gap-4 col-span-2">
-                  <button type="button" onClick={() => setFormData({...formData, debt_type: 'owe_me'})} className={`py-4 rounded-2xl font-black text-xs uppercase tracking-widest border transition-all ${formData.debt_type === 'owe_me' ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' : 'glass text-slate-500 border-white/10'}`}>Credit Extended</button>
-                  <button type="button" onClick={() => setFormData({...formData, debt_type: 'i_owe'})} className={`py-4 rounded-2xl font-black text-xs uppercase tracking-widest border transition-all ${formData.debt_type === 'i_owe' ? 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-500/20' : 'glass text-slate-500 border-white/10'}`}>Liability Incurred</button>
+                <div className="grid grid-cols-2 gap-3 col-span-2">
+                  <button type="button" onClick={() => setFormData({...formData, debt_type: 'owe_me'})} className={`h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all interactive-active ${formData.debt_type === 'owe_me' ? 'bg-blue-600 text-white border-blue-600' : 'glass text-slate-500 border-white/10'}`}>Credit Extended</button>
+                  <button type="button" onClick={() => setFormData({...formData, debt_type: 'i_owe'})} className={`h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all interactive-active ${formData.debt_type === 'i_owe' ? 'bg-amber-600 text-white border-amber-600' : 'glass text-slate-500 border-white/10'}`}>Liability Incurred</button>
                 </div>
               </>
             )}
 
             {type !== 'cash' && (
-              <div className="space-y-3 col-span-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Effective Date</label>
-                <input required type="date" className="w-full h-16 glass rounded-2xl px-6 text-white outline-none border-white/5" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+              <div className="space-y-2 col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Date</label>
+                <input required type="date" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
               </div>
             )}
           </div>
 
-          <div className="pt-8">
+          <div className="pt-6">
             <button 
               type="submit" disabled={loading}
-              className="w-full h-20 bg-white text-slate-950 font-black text-xl rounded-[32px] shadow-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 uppercase tracking-widest"
+              className="w-full h-16 bg-white text-slate-950 font-black text-sm rounded-2xl shadow-xl hover:bg-slate-200 transition-all disabled:opacity-50 uppercase tracking-[0.2em] interactive-active"
             >
-              {loading ? 'Processing...' : 'Authorize Transaction'}
+              {loading ? 'Processing...' : 'Commit entry'}
             </button>
           </div>
+          {/* Safe Area Spacer for iOS Home Indicator */}
+          <div className="h-safe sm:hidden"></div>
         </form>
       </div>
     </div>
