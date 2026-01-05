@@ -1,4 +1,5 @@
-const CACHE_NAME = 'drahmi-v3';
+
+const CACHE_NAME = 'drahmi-v4';
 const OFFLINE_URL = '/index.html';
 
 const STATIC_ASSETS = [
@@ -6,23 +7,29 @@ const STATIC_ASSETS = [
   '/index.html',
   '/index.tsx',
   '/manifest.json',
-  '/style.css',
+  '/lib/supabase.ts',
+  '/types.ts',
+  '/components/Auth.tsx',
+  '/components/Dashboard.tsx',
+  '/components/Modal.tsx',
+  '/components/TransactionList.tsx',
   'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap'
+  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap',
+  'https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-192.png',
+  'https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-512.png'
 ];
 
-// Install event - precache the core application shell
+// Install event - precache core shell
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Immediate activation
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Precaching static assets');
       return cache.addAll(STATIC_ASSETS);
     })
   );
-  self.skipWaiting();
 });
 
-// Activate event - cleanup outdated caches
+// Activate event - cleanup old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -31,38 +38,51 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  self.clients.claim();
+  self.clients.claim(); // Immediate control
 });
 
-// Fetch event
+// Fetch event with Cache First Strategy for Static Assets
 self.addEventListener('fetch', (event) => {
-  // We only handle GET requests for caching
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Strategy: Stale-While-Revalidate for most assets
-  // This allows the app to load instantly from cache while updating in the background
+  // For navigation requests (opening the app), try network first but fallback to cached index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(OFFLINE_URL);
+      })
+    );
+    return;
+  }
+
+  // Cache First Strategy for static assets and CDN calls
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // Cache the new response if it's valid
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic' || url.host === 'fonts.gstatic.com' || url.host === 'cdn.tailwindcss.com') {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      return fetch(event.request).then((networkResponse) => {
+        // Cache external CSS/Fonts/CDN and local JS/Assets
+        if (
+          networkResponse.ok && 
+          (url.origin === location.origin || 
+           url.host === 'cdn.tailwindcss.com' || 
+           url.host === 'fonts.googleapis.com' || 
+           url.host === 'fonts.gstatic.com' ||
+           url.host === 'jwcvbgfuktoqqzkqsnec.supabase.co')
+        ) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }
         return networkResponse;
-      }).catch((error) => {
-        // If network fails and it's a navigation request, return index.html
-        if (event.request.mode === 'navigate') {
-          return caches.match(OFFLINE_URL);
-        }
-        throw error;
+      }).catch(() => {
+        // Silent fail for other fetch requests if offline
       });
-
-      return cachedResponse || fetchPromise;
     })
   );
 });
