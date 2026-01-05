@@ -5,6 +5,35 @@ import { CashRecord, Income, Expense, Debt, Person, DashboardStats } from '../ty
 import TransactionList from './TransactionList';
 import Modal from './Modal';
 
+// IndexedDB Persistence Logic
+const DB_NAME = 'DrahmiCache';
+const STORE_NAME = 'lastState';
+
+const saveToLocal = (data: any) => {
+  const request = indexedDB.open(DB_NAME, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+  request.onsuccess = () => {
+    const db = request.result;
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(data, 'dashboard');
+  };
+};
+
+const getLocal = (): Promise<any> => {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const getReq = tx.objectStore(STORE_NAME).get('dashboard');
+      getReq.onsuccess = () => resolve(getReq.result);
+      getReq.onerror = () => resolve(null);
+    };
+    request.onerror = () => resolve(null);
+  });
+};
+
 interface DashboardProps {
   user: User;
 }
@@ -29,9 +58,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState<'income' | 'expense' | 'debt' | 'cash' | null>(null);
 
+  // Load cache on mount
+  useEffect(() => {
+    getLocal().then(cached => {
+      if (cached) {
+        setStats(cached.stats);
+        setIncomes(cached.incomes);
+        setExpenses(cached.expenses);
+        setDebts(cached.debts);
+        setPeople(cached.people);
+        // If we have cache, we stop the initial loader but still fetch in background
+        setLoading(false);
+      }
+    });
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
       const [
         { data: cashData },
         { data: incomeData },
@@ -52,21 +95,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       const totalOwedToMe = (debtData as Debt[])?.filter(d => d.type === 'owe_me').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
       const totalIOwe = (debtData as Debt[])?.filter(d => d.type === 'i_owe').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
-      setStats({
+      const newStats = {
         totalCash,
         totalIncome,
         totalExpenses,
         totalOwedToMe,
         totalIOwe,
         netBalance: totalCash + totalOwedToMe - totalIOwe,
+      };
+
+      const finalIncomes = incomeData || [];
+      const finalExpenses = expenseData || [];
+      const finalDebts = debtData || [];
+      const finalPeople = peopleData || [];
+
+      setStats(newStats);
+      setIncomes(finalIncomes);
+      setExpenses(finalExpenses);
+      setDebts(finalDebts);
+      setPeople(finalPeople);
+
+      // Save for offline use
+      saveToLocal({
+        stats: newStats,
+        incomes: finalIncomes,
+        expenses: finalExpenses,
+        debts: finalDebts,
+        people: finalPeople
       });
 
-      setIncomes(incomeData || []);
-      setExpenses(expenseData || []);
-      setDebts(debtData || []);
-      setPeople(peopleData || []);
     } catch (err) {
-      console.error(err);
+      console.warn("Supabase fetch failed, likely offline or unauthorized. Using cached data.");
     } finally {
       setLoading(false);
     }
@@ -114,7 +173,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 xl:ml-72 p-6 md:p-12 lg:p-20">
+      <main className="flex-1 xl:ml-72 p-6 md:p-12 lg:p-20 safe-area-pb">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-16">
           <div>
             <h2 className="text-4xl font-extrabold tracking-tight text-white mb-2">Welcome Back</h2>
