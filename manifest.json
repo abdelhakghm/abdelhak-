@@ -1,0 +1,23 @@
+{
+  "name": "Drahmi - Money Management",
+  "short_name": "Drahmi",
+  "description": "Production-ready money management ecosystem.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
