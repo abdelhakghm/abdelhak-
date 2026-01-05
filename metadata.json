@@ -1,0 +1,5 @@
+{
+  "name": "Drahmi - Production Money Management",
+  "description": "A high-performance fintech SaaS for tracking cash, incomes, expenses, and debts with real-time Supabase integration and dark mode UI.",
+  "requestFramePermissions": []
+}
