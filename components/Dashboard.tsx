@@ -32,7 +32,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      
       const [
         { data: cashData },
         { data: incomeData },
@@ -67,314 +66,217 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setDebts(debtData || []);
       setPeople(peopleData || []);
     } catch (err) {
-      console.error("Error fetching data:", err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleSignOut = () => supabase.auth.signOut();
-
-  const getTimeGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
-
-  const NavItem = ({ view, label, icon }: { view: View, label: string, icon: React.ReactNode }) => (
+  const SideNavItem = ({ view, label, icon }: { view: View, label: string, icon: React.ReactNode }) => (
     <button
       onClick={() => setActiveView(view)}
-      className={`flex flex-col items-center gap-1.5 py-2 flex-1 transition-all ${
-        activeView === view ? 'text-blue-500 scale-105' : 'text-slate-600 hover:text-slate-400'
+      className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 rounded-xl mb-2 ${
+        activeView === view ? 'active-nav font-bold shadow-lg shadow-blue-500/10' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
       }`}
     >
-      <div className={`${activeView === view ? 'bg-blue-500/10 p-2 rounded-xl' : 'p-2'}`}>
-        {icon}
-      </div>
-      <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+      {icon}
+      <span className="text-sm tracking-wide">{label}</span>
     </button>
   );
 
   return (
-    <div className="min-h-screen pb-32 max-w-lg mx-auto px-6 pt-8">
-      {/* Dynamic Header */}
-      <header className="flex items-center justify-between mb-10">
-        <div>
-          <p className="text-slate-500 text-sm font-medium mb-1">{getTimeGreeting()},</p>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            {user.email?.split('@')[0]}
-          </h1>
+    <div className="flex min-h-screen">
+      {/* Sidebar Navigation */}
+      <aside className="w-72 glass border-r border-white/5 fixed inset-y-0 left-0 hidden xl:flex flex-col p-8 z-50">
+        <div className="flex items-center gap-4 mb-12">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-xl font-bold text-white shadow-xl shadow-blue-500/20">D</div>
+          <h1 className="text-2xl font-extrabold tracking-tighter">Drahmi</h1>
         </div>
-        <div className="flex gap-3">
-          {activeView === 'home' && (
-             <button 
+        
+        <nav className="flex-1">
+          <SideNavItem view="home" label="Dashboard" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>} />
+          <SideNavItem view="history" label="Activity Vault" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>} />
+          <SideNavItem view="debts" label="Counterparties" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857"/></svg>} />
+          <SideNavItem view="settings" label="Account" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>} />
+        </nav>
+
+        <div className="pt-8 border-t border-white/5">
+          <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
+            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold">{user.email?.charAt(0).toUpperCase()}</div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-bold truncate">{user.email?.split('@')[0]}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-black">Pro Member</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 xl:ml-72 p-6 md:p-12 lg:p-20">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-16">
+          <div>
+            <h2 className="text-4xl font-extrabold tracking-tight text-white mb-2">Welcome Back</h2>
+            <p className="text-slate-500 font-medium">Your financial ecosystem is performing optimally.</p>
+          </div>
+          <div className="flex gap-4">
+            <button 
               onClick={() => setActiveModal('cash')}
-              className="w-10 h-10 flex items-center justify-center bg-slate-900 border border-slate-800 rounded-full hover:border-blue-500/50 transition-all text-slate-400 hover:text-blue-400 shadow-lg"
-              title="Update Wallet"
+              className="px-6 py-3 glass rounded-xl text-sm font-bold border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+              Set Reserve
             </button>
-          )}
-        </div>
-      </header>
-
-      {/* Main Content Areas */}
-      <div className="transition-all duration-500 animate-in fade-in slide-in-from-bottom-3">
-        {activeView === 'home' && (
-          <div className="space-y-8">
-            {/* Hero Net Worth Card */}
-            <div className="relative overflow-hidden glass-card rounded-[32px] p-8 bg-gradient-to-br from-blue-600/20 via-indigo-950/20 to-slate-950 border-white/5 shadow-2xl">
-              <div className="relative z-10">
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] mb-2">Net Financial Worth</p>
-                <h2 className="text-4xl font-extrabold text-white flex items-baseline tracking-tighter">
-                  <span className="text-blue-500 mr-2 text-xl font-medium">DA</span>
-                  {stats.netBalance.toLocaleString()}
-                </h2>
-                
-                <div className="mt-8 grid grid-cols-2 gap-4 border-t border-white/5 pt-6">
-                  <div>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Liquid Cash</p>
-                    <p className="text-lg font-bold text-slate-200">{stats.totalCash.toLocaleString()}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Credit/Debt</p>
-                    <p className={`text-lg font-bold ${(stats.totalOwedToMe - stats.totalIOwe) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {((stats.totalOwedToMe - stats.totalIOwe) >= 0 ? '+' : '')}{(stats.totalOwedToMe - stats.totalIOwe).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {/* Abstract Background Elements */}
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-600/10 rounded-full blur-[80px]" />
-              <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-[80px]" />
-            </div>
-
-            {/* Quick Stats Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="glass-card p-5 rounded-3xl border-slate-800/50 hover:border-emerald-500/20 transition-all group">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-3 group-hover:scale-110 transition-transform">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/></svg>
-                </div>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total Income</p>
-                <p className="text-lg font-bold text-white tracking-tight">{stats.totalIncome.toLocaleString()} <span className="text-[10px] text-slate-600">DA</span></p>
-              </div>
-              <div className="glass-card p-5 rounded-3xl border-slate-800/50 hover:border-rose-500/20 transition-all group">
-                <div className="w-8 h-8 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 mb-3 group-hover:scale-110 transition-transform">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/></svg>
-                </div>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total Spent</p>
-                <p className="text-lg font-bold text-white tracking-tight">{stats.totalExpenses.toLocaleString()} <span className="text-[10px] text-slate-600">DA</span></p>
-              </div>
-            </div>
-
-            {/* Smart Insights Section */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-slate-600 uppercase tracking-[0.3em] px-2">Smart Insights</h3>
-              <div className="glass-card p-6 rounded-3xl bg-slate-900/30 border-slate-800/40">
-                <div className="flex justify-between items-end mb-4">
-                  <div>
-                    <p className="text-slate-400 text-xs mb-1">Burn Rate</p>
-                    <p className="text-lg font-bold text-white">
-                      {((stats.totalExpenses / (stats.totalIncome || 1)) * 100).toFixed(0)}% <span className="text-[10px] font-normal text-slate-500">of income</span>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${stats.totalIncome >= stats.totalExpenses ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {stats.totalIncome >= stats.totalExpenses ? 'Sustainable' : 'High Usage'}
-                    </p>
-                  </div>
-                </div>
-                <div className="w-full h-1.5 bg-slate-800/50 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-1000 ease-out rounded-full ${stats.totalIncome >= stats.totalExpenses ? 'bg-blue-500' : 'bg-rose-500'}`}
-                    style={{ width: `${Math.min(100, (stats.totalExpenses / (stats.totalIncome || 1)) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
             <button 
-              onClick={() => setActiveView('history')}
-              className="w-full py-4 bg-slate-900 border border-slate-800 rounded-2xl text-slate-300 text-sm font-semibold hover:bg-slate-800 hover:text-white transition-all shadow-xl shadow-black/20"
+              onClick={() => setActiveModal('expense')}
+              className="px-6 py-3 bg-white text-slate-950 rounded-xl text-sm font-bold hover:bg-slate-200 transition-all shadow-xl"
             >
-              Manage Transactions
+              New Transaction
             </button>
           </div>
-        )}
+        </header>
 
-        {activeView === 'history' && (
-          <div className="space-y-8">
-            <div className="flex gap-4">
-              <button 
-                onClick={() => setActiveModal('income')}
-                className="flex-1 py-6 bg-emerald-600/10 border border-emerald-500/20 hover:bg-emerald-600/20 text-emerald-400 font-bold rounded-3xl shadow-xl transition-all transform active:scale-95 flex flex-col items-center gap-2"
-              >
-                <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+        <div className="max-w-6xl mx-auto space-y-12">
+          {activeView === 'home' && (
+            <>
+              {/* Massive Metrics Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="premium-card rounded-[32px] p-8 col-span-1 md:col-span-2 relative overflow-hidden">
+                  <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-6">Aggregate Net Worth</p>
+                  <h3 className="text-6xl font-extrabold tracking-tighter mb-12 flex items-baseline">
+                    <span className="text-blue-500 mr-4 text-3xl font-medium">DA</span>
+                    {stats.netBalance.toLocaleString()}
+                  </h3>
+                  <div className="flex gap-10">
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-2">Cash Base</p>
+                      <p className="text-2xl font-bold">{stats.totalCash.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-2">Credit Spread</p>
+                      <p className={`text-2xl font-bold ${stats.totalOwedToMe >= stats.totalIOwe ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {(stats.totalOwedToMe - stats.totalIOwe).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[10px] uppercase tracking-[0.2em]">Add Income</span>
-              </button>
-              <button 
-                onClick={() => setActiveModal('expense')}
-                className="flex-1 py-6 bg-rose-600/10 border border-rose-500/20 hover:bg-rose-600/20 text-rose-400 font-bold rounded-3xl shadow-xl transition-all transform active:scale-95 flex flex-col items-center gap-2"
-              >
-                <div className="w-10 h-10 bg-rose-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-rose-500/30">
-                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"/></svg>
-                </div>
-                <span className="text-[10px] uppercase tracking-[0.2em]">Add Expense</span>
-              </button>
-            </div>
-            
-            <TransactionList 
-              title="Transaction Ledger" 
-              incomes={incomes} 
-              expenses={expenses} 
-              onRefresh={fetchData} 
-            />
-          </div>
-        )}
 
-        {activeView === 'debts' && (
-          <div className="space-y-8">
-             <div className="grid grid-cols-2 gap-4">
-              <div className="glass-card p-6 rounded-3xl border-slate-800/50">
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Receivables</p>
-                <p className="text-xl font-bold text-emerald-400">{stats.totalOwedToMe.toLocaleString()} <span className="text-xs font-normal">DA</span></p>
-              </div>
-              <div className="glass-card p-6 rounded-3xl border-slate-800/50">
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Payables</p>
-                <p className="text-xl font-bold text-amber-400">{stats.totalIOwe.toLocaleString()} <span className="text-xs font-normal">DA</span></p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setActiveModal('debt')}
-              className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-3xl shadow-2xl transition-all transform active:scale-95 flex items-center justify-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-              Register New Debt
-            </button>
-            <div className="glass-card p-8 rounded-[32px] border-slate-800/40">
-              <h2 className="text-lg font-bold mb-8 text-white flex items-center gap-3">
-                Current Debtors & Creditors
-                <span className="bg-slate-800 text-slate-500 text-[10px] px-2.5 py-1 rounded-full">{debts.length}</span>
-              </h2>
-              {debts.length === 0 ? (
-                <div className="text-center py-20 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800/50">
-                  <p className="text-slate-600 italic text-sm">No outstanding debts recorded.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {debts.map(debt => (
-                    <div key={debt.id} className="flex items-center justify-between p-5 rounded-2xl bg-slate-950/40 border border-slate-800/60 hover:border-slate-700 transition-colors">
-                      <div>
-                        <p className="font-bold text-white mb-0.5">{debt.person?.name || 'Contact'}</p>
-                        <p className={`text-[10px] font-bold uppercase tracking-[0.1em] ${debt.type === 'owe_me' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                          {debt.type === 'owe_me' ? 'Receivable' : 'Payable'}
-                        </p>
+                <div className="premium-card rounded-[32px] p-8 flex flex-col justify-between">
+                  <div>
+                    <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4">Cash Flow Delta</p>
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 text-sm">Monthly In</span>
+                        <span className="text-emerald-400 font-bold">+{stats.totalIncome.toLocaleString()}</span>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-white">{Number(debt.amount).toLocaleString()} DA</p>
-                        <p className="text-[10px] text-slate-600 mt-1">{new Date(debt.date).toLocaleDateString()}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 text-sm">Monthly Out</span>
+                        <span className="text-rose-400 font-bold">-{stats.totalExpenses.toLocaleString()}</span>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  <button onClick={() => setActiveView('history')} className="w-full py-4 glass rounded-2xl text-[10px] uppercase font-black tracking-widest mt-8 border-white/5 hover:border-blue-500/30">
+                    Deep Audit
+                  </button>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
 
-        {activeView === 'settings' && (
-          <div className="space-y-8">
-            <div className="glass-card p-8 rounded-[32px] border-slate-800/40">
-              <div className="flex flex-col items-center text-center mb-12">
-                <div className="relative mb-6">
-                  <div className="w-28 h-28 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-full flex items-center justify-center text-5xl font-bold shadow-2xl border-4 border-slate-900">
+              {/* Secondary Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <TransactionList title="Critical Operations" incomes={incomes} expenses={expenses} onRefresh={fetchData} />
+                <div className="space-y-8">
+                   <div className="premium-card rounded-[32px] p-8">
+                      <h4 className="text-xl font-bold mb-6">Counterparty Risk</h4>
+                      <div className="space-y-4">
+                        {debts.slice(0, 3).map(debt => (
+                          <div key={debt.id} className="flex items-center justify-between p-5 rounded-2xl bg-white/5 border border-white/5">
+                            <span className="font-bold">{debt.person?.name}</span>
+                            <span className={`font-black ${debt.type === 'owe_me' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {debt.type === 'owe_me' ? '+' : '-'}{debt.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                        <button onClick={() => setActiveView('debts')} className="w-full text-center text-sm text-blue-500 font-bold pt-4 hover:underline">View All Counterparties</button>
+                      </div>
+                   </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeView === 'history' && (
+            <div className="animate-fade-up">
+               <TransactionList title="Full Transaction Ledger" incomes={incomes} expenses={expenses} onRefresh={fetchData} />
+            </div>
+          )}
+
+          {activeView === 'debts' && (
+            <div className="animate-fade-up grid grid-cols-1 lg:grid-cols-2 gap-8">
+               <div className="premium-card rounded-[32px] p-8">
+                  <h2 className="text-2xl font-bold mb-8">Receivables</h2>
+                  <div className="space-y-4">
+                    {debts.filter(d => d.type === 'owe_me').map(debt => (
+                      <div key={debt.id} className="flex items-center justify-between p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+                        <span className="font-bold">{debt.person?.name}</span>
+                        <span className="text-emerald-400 font-black">{debt.amount.toLocaleString()} DA</span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+               <div className="premium-card rounded-[32px] p-8">
+                  <h2 className="text-2xl font-bold mb-8">Payables</h2>
+                  <div className="space-y-4">
+                    {debts.filter(d => d.type === 'i_owe').map(debt => (
+                      <div key={debt.id} className="flex items-center justify-between p-5 rounded-2xl bg-amber-500/5 border border-amber-500/10">
+                        <span className="font-bold">{debt.person?.name}</span>
+                        <span className="text-amber-400 font-black">{debt.amount.toLocaleString()} DA</span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+               <button onClick={() => setActiveModal('debt')} className="lg:col-span-2 py-6 bg-blue-600 rounded-3xl font-black uppercase tracking-widest text-white shadow-2xl shadow-blue-600/20 active:scale-[0.98] transition-transform">
+                 Register New Obligation
+               </button>
+            </div>
+          )}
+
+          {activeView === 'settings' && (
+            <div className="max-w-2xl mx-auto animate-fade-up">
+               <div className="premium-card rounded-[48px] p-12 text-center">
+                  <div className="w-32 h-32 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-full flex items-center justify-center text-5xl font-black shadow-2xl mx-auto mb-10">
                     {user.email?.charAt(0).toUpperCase()}
                   </div>
-                  <div className="absolute bottom-1 right-1 w-6 h-6 bg-emerald-500 border-4 border-slate-900 rounded-full" />
-                </div>
-                <h2 className="text-2xl font-bold text-white tracking-tight">{user.email?.split('@')[0]}</h2>
-                <p className="text-slate-500 text-sm mt-1">{user.email}</p>
-              </div>
-              
-              <div className="space-y-3">
-                <button className="w-full flex items-center justify-between p-5 bg-slate-900/40 hover:bg-slate-900/80 rounded-2xl transition-all border border-slate-800/60 group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500 group-hover:text-blue-400 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                    </div>
-                    <span className="text-slate-300 font-semibold text-sm">Account Preferences</span>
+                  <h3 className="text-3xl font-black mb-2">{user.email?.split('@')[0]}</h3>
+                  <p className="text-slate-500 mb-12">{user.email}</p>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <button className="py-4 glass rounded-2xl text-xs font-black uppercase tracking-widest border-white/5">Update Bio</button>
+                    <button onClick={() => supabase.auth.signOut()} className="py-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-500/20">Sign Out</button>
                   </div>
-                  <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-                </button>
-                <button className="w-full flex items-center justify-between p-5 bg-slate-900/40 hover:bg-slate-900/80 rounded-2xl transition-all border border-slate-800/60 group">
-                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-500 group-hover:text-blue-400 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/></svg>
-                    </div>
-                    <span className="text-slate-300 font-semibold text-sm">Currency (DA)</span>
-                  </div>
-                  <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-                </button>
-              </div>
-
-              <button 
-                onClick={handleSignOut}
-                className="w-full mt-12 py-5 bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 rounded-[24px] font-bold transition-all border border-rose-500/10 active:scale-95 shadow-lg"
-              >
-                End Active Session
-              </button>
+               </div>
             </div>
-            
-            <div className="text-center pb-8">
-              <p className="text-[10px] text-slate-700 uppercase tracking-[0.5em] font-bold">Drahmi • Secure Fintech</p>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </main>
 
-      {/* Modern High-End Floating Nav */}
-      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-3xl border border-white/5 px-8 py-3 flex items-center justify-between z-40 w-[92%] max-w-md rounded-[32px] shadow-2xl shadow-black">
-        <NavItem 
-          view="home" 
-          label="Home" 
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>} 
-        />
-        <NavItem 
-          view="history" 
-          label="History" 
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>} 
-        />
-        <NavItem 
-          view="debts" 
-          label="Debts" 
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>} 
-        />
-        <NavItem 
-          view="settings" 
-          label="Settings" 
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>} 
-        />
+      {/* Mobile Floating Nav - Refined for Pro look */}
+      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 xl:hidden glass rounded-[32px] px-4 py-2 flex gap-4 shadow-2xl z-50 border-white/10 w-[90%] max-w-sm">
+        <button onClick={() => setActiveView('home')} className={`flex-1 py-3 rounded-2xl flex flex-col items-center ${activeView === 'home' ? 'text-blue-500 bg-white/5' : 'text-slate-500'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        </button>
+        <button onClick={() => setActiveView('history')} className={`flex-1 py-3 rounded-2xl flex flex-col items-center ${activeView === 'history' ? 'text-blue-500 bg-white/5' : 'text-slate-500'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </button>
+        <button onClick={() => setActiveView('debts')} className={`flex-1 py-3 rounded-2xl flex flex-col items-center ${activeView === 'debts' ? 'text-blue-500 bg-white/5' : 'text-slate-500'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857"/></svg>
+        </button>
+        <button onClick={() => setActiveView('settings')} className={`flex-1 py-3 rounded-2xl flex flex-col items-center ${activeView === 'settings' ? 'text-blue-500 bg-white/5' : 'text-slate-500'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        </button>
       </nav>
 
-      {/* Interaction Modals */}
-      {activeModal && (
-        <Modal 
-          type={activeModal} 
-          people={people} 
-          onClose={() => setActiveModal(null)} 
-          onSuccess={() => {
-            setActiveModal(null);
-            fetchData();
-          }} 
-        />
-      )}
+      {activeModal && <Modal type={activeModal} people={people} onClose={() => setActiveModal(null)} onSuccess={() => { setActiveModal(null); fetchData(); }} />}
     </div>
   );
 };

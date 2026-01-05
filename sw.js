@@ -1,23 +1,28 @@
-const CACHE_NAME = 'drahmi-v2';
+const CACHE_NAME = 'drahmi-v3';
+const OFFLINE_URL = '/index.html';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/index.tsx',
   '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  'https://cdn.tailwindcss.com'
+  '/style.css',
+  'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap'
 ];
 
-// Install event - cache static shell
+// Install event - precache the core application shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
+      console.log('Precaching static assets');
       return cache.addAll(STATIC_ASSETS);
     })
   );
   self.skipWaiting();
 });
 
-// Activate event - cleanup old caches
+// Activate event - cleanup outdated caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -29,25 +34,32 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - Stale-While-Revalidate strategy
+// Fetch event
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests that aren't for fonts or scripts we need
+  // We only handle GET requests for caching
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
+
+  // Strategy: Stale-While-Revalidate for most assets
+  // This allows the app to load instantly from cache while updating in the background
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
         // Cache the new response if it's valid
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic' || url.host === 'fonts.gstatic.com' || url.host === 'cdn.tailwindcss.com') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }
         return networkResponse;
-      }).catch(() => {
-        // If fetch fails and no cache, we're truly offline
-        return cachedResponse;
+      }).catch((error) => {
+        // If network fails and it's a navigation request, return index.html
+        if (event.request.mode === 'navigate') {
+          return caches.match(OFFLINE_URL);
+        }
+        throw error;
       });
 
       return cachedResponse || fetchPromise;

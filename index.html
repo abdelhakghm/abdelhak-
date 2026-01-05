@@ -3,194 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Drahmi - Production Money Management</title>
+    <title>Drahmi — Wealth Command Center</title>
     
-    <!-- PWA / Mobile Web App Meta Tags -->
+    <!-- PWA Primary Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Drahmi">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
     
-    <!-- Splash Screen Icons for iOS -->
+    <!-- SEO & Accessibility -->
+    <meta name="description" content="Professional Fintech wealth tracking and command center.">
     <link rel="apple-touch-icon" href="https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-192.png">
     <link rel="manifest" href="/manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #3b82f6;
-            --secondary: #6366f1;
             --bg: #020617;
-            --card-bg: rgba(15, 23, 42, 0.7);
         }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             background-color: var(--bg);
             color: #f8fafc;
             margin: 0;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
-            /* Support for notch on modern iPhones */
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
+            overscroll-behavior: none; /* Prevent rubber-banding on PWA */
         }
 
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-        }
-
-        /* Sliding Auth Panel Styles */
-        .auth-container {
-            position: relative;
+        .mesh-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            max-width: 850px;
-            min-height: 550px;
-            overflow: hidden;
-            border-radius: 24px;
-        }
-
-        .form-container {
-            position: absolute;
-            top: 0;
             height: 100%;
-            transition: all 0.6s ease-in-out;
+            z-index: -1;
+            background: 
+                radial-gradient(at 0% 0%, hsla(220,100%,10%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(230,100%,15%,1) 0, transparent 50%),
+                radial-gradient(at 50% 100%, hsla(210,100%,10%,1) 0, transparent 50%);
+            filter: blur(80px);
+            opacity: 0.6;
         }
 
-        .sign-in-container {
-            left: 0;
-            width: 50%;
-            z-index: 2;
+        .glass {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        .sign-up-container {
-            left: 0;
-            width: 50%;
-            opacity: 0;
-            z-index: 1;
+        .premium-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
-        .auth-container.right-panel-active .sign-in-container {
-            transform: translateX(100%);
-            opacity: 0;
+        .premium-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(59, 130, 246, 0.3);
         }
 
-        .auth-container.right-panel-active .sign-up-container {
-            transform: translateX(100%);
-            opacity: 1;
-            z-index: 5;
-            animation: show 0.6s;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
 
-        @keyframes show {
-            0%, 49.99% { opacity: 0; z-index: 1; }
-            50%, 100% { opacity: 1; z-index: 5; }
+        .animate-modal {
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        .overlay-container {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            width: 50%;
-            height: 100%;
-            overflow: hidden;
-            transition: transform 0.6s ease-in-out;
-            z-index: 100;
+        .active-nav {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border-left: 3px solid #3b82f6;
         }
 
-        .auth-container.right-panel-active .overlay-container {
-            transform: translateX(-100%);
+        ::-webkit-scrollbar {
+            width: 6px;
         }
-
-        .overlay {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            background-repeat: no-repeat;
-            background-size: cover;
-            background-position: 0 0;
-            color: #FFFFFF;
-            position: relative;
-            left: -100%;
-            height: 100%;
-            width: 200%;
-            transform: translateX(0);
-            transition: transform 0.6s ease-in-out;
-        }
-
-        .auth-container.right-panel-active .overlay {
-            transform: translateX(50%);
-        }
-
-        .overlay-panel {
-            position: absolute;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            padding: 0 40px;
-            text-align: center;
-            top: 0;
-            height: 100%;
-            width: 50%;
-            transform: translateX(0);
-            transition: transform 0.6s ease-in-out;
-        }
-
-        .overlay-right {
-            right: 0;
-            transform: translateX(0);
-        }
-
-        .auth-container.right-panel-active .overlay-right {
-            transform: translateX(20%);
-        }
-
-        .overlay-left {
-            transform: translateX(-20%);
-        }
-
-        .auth-container.right-panel-active .overlay-left {
-            transform: translateX(0);
-        }
-
-        /* Mobile Adjustments for Auth */
-        @media (max-width: 640px) {
-            .auth-container {
-                min-height: 650px;
-                display: flex;
-                flex-direction: column;
-            }
-            .overlay-container {
-                display: none;
-            }
-            .form-container {
-                width: 100% !important;
-                position: relative;
-                transform: none !important;
-                opacity: 1 !important;
-            }
-            .sign-up-container {
-                display: none;
-            }
-            .auth-container.right-panel-active .sign-in-container {
-                display: none;
-            }
-            .auth-container.right-panel-active .sign-up-container {
-                display: block;
-                width: 100% !important;
-            }
-        }
-
-        .custom-scroll::-webkit-scrollbar {
-            width: 5px;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
+        ::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
         }
@@ -207,6 +106,13 @@
 </script>
 </head>
 <body>
+    <noscript>
+        <div style="text-align: center; padding: 50px; color: white; background: #020617; height: 100vh;">
+            <h1>JavaScript Required</h1>
+            <p>Drahmi requires JavaScript to function securely. Please enable it in your browser settings.</p>
+        </div>
+    </noscript>
+    <div class="mesh-bg"></div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>
