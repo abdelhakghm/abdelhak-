@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Drahmi - Production Money Management</title>
     
     <!-- PWA / Mobile Web App Meta Tags -->
@@ -12,7 +12,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
     
-    <!-- App Icons -->
+    <!-- Splash Screen Icons for iOS -->
     <link rel="apple-touch-icon" href="https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-192.png">
     <link rel="manifest" href="/manifest.json">
 
@@ -35,6 +35,9 @@
             margin: 0;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
+            /* Support for notch on modern iPhones */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         .glass-card {
