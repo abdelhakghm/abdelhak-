@@ -1,9 +1,53 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { CashRecord, Income, Expense, Debt, Person, DashboardStats } from '../types';
+import { CashRecord, Income, Expense, Debt, Person, DashboardStats, SavingsGoal } from '../types';
 import TransactionList from './TransactionList';
 import Modal from './Modal';
+
+// Icons - iOS 26 Design System (Bold 2.5pt stroke)
+const Icons = {
+  Home: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 10L12 3L21 10V20C21 20.5523 20.5523 21 20 21H15V15H9V21H4C3.44772 21 3 20.5523 3 20V10Z" />
+    </svg>
+  ),
+  History: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7V12L15 15" />
+      <path d="M12 3C7.02944 3 3 7.02944 3 12C3 12.3411 3.01897 12.6778 3.05609 13" />
+    </svg>
+  ),
+  Savings: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 5H5C3.89543 5 3 5.89543 3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V7C21 5.89543 20.1046 5 19 5Z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M3 12H7" />
+      <path d="M17 12H21" />
+    </svg>
+  ),
+  Vault: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="4" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 8V10" />
+      <path d="M12 14V16" />
+    </svg>
+  ),
+  Profile: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21V19C20 16.7909 18.2091 15 16 15H8C5.79086 15 4 16.7909 4 19V21" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
+  Plus: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+};
 
 // IndexedDB Persistence Logic
 const DB_NAME = 'DrahmiCache';
@@ -38,7 +82,7 @@ interface DashboardProps {
   user: User;
 }
 
-type View = 'home' | 'history' | 'debts' | 'settings';
+type View = 'home' | 'history' | 'debts' | 'savings' | 'settings';
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [activeView, setActiveView] = useState<View>('home');
@@ -49,16 +93,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     totalOwedToMe: 0,
     totalIOwe: 0,
     netBalance: 0,
+    totalSavings: 0,
   });
   
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeModal, setActiveModal] = useState<'income' | 'expense' | 'debt' | 'cash' | null>(null);
+  const [activeModal, setActiveModal] = useState<'income' | 'expense' | 'debt' | 'cash' | 'savings_goal' | null>(null);
 
-  // Load cache on mount
   useEffect(() => {
     getLocal().then(cached => {
       if (cached) {
@@ -66,6 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         setIncomes(cached.incomes);
         setExpenses(cached.expenses);
         setDebts(cached.debts);
+        setGoals(cached.goals || []);
         setPeople(cached.people);
         setLoading(false);
       }
@@ -79,13 +125,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         { data: incomeData },
         { data: expenseData },
         { data: debtData },
-        { data: peopleData }
+        { data: peopleData },
+        { data: goalData }
       ] = await Promise.all([
         supabase.from('cash').select('*').single(),
         supabase.from('incomes').select('*').order('date', { ascending: false }),
         supabase.from('expenses').select('*').order('date', { ascending: false }),
         supabase.from('debts').select('*, people(*)').order('date', { ascending: false }),
-        supabase.from('people').select('*')
+        supabase.from('people').select('*'),
+        supabase.from('savings_goals').select('*').order('created_at', { ascending: false })
       ]);
 
       const totalCash = (cashData as CashRecord)?.amount || 0;
@@ -93,6 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       const totalExpenses = (expenseData as Expense[])?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
       const totalOwedToMe = (debtData as Debt[])?.filter(d => d.type === 'owe_me').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
       const totalIOwe = (debtData as Debt[])?.filter(d => d.type === 'i_owe').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+      const totalSavings = (goalData as SavingsGoal[])?.reduce((acc, curr) => acc + Number(curr.saved_amount), 0) || 0;
 
       const newStats = {
         totalCash,
@@ -100,26 +149,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         totalExpenses,
         totalOwedToMe,
         totalIOwe,
-        netBalance: totalCash + totalOwedToMe - totalIOwe,
+        totalSavings,
+        netBalance: totalCash + totalOwedToMe - totalIOwe + totalSavings,
       };
 
-      const finalIncomes = incomeData || [];
-      const finalExpenses = expenseData || [];
-      const finalDebts = debtData || [];
-      const finalPeople = peopleData || [];
-
       setStats(newStats);
-      setIncomes(finalIncomes);
-      setExpenses(finalExpenses);
-      setDebts(finalDebts);
-      setPeople(finalPeople);
+      setIncomes(incomeData || []);
+      setExpenses(expenseData || []);
+      setDebts(debtData || []);
+      setPeople(peopleData || []);
+      setGoals(goalData || []);
 
       saveToLocal({
         stats: newStats,
-        incomes: finalIncomes,
-        expenses: finalExpenses,
-        debts: finalDebts,
-        people: finalPeople
+        incomes: incomeData || [],
+        expenses: expenseData || [],
+        debts: debtData || [],
+        people: peopleData || [],
+        goals: goalData || []
       });
 
     } catch (err) {
@@ -131,77 +178,62 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const SideNavItem = ({ view, label, icon }: { view: View, label: string, icon: React.ReactNode }) => (
+  const SideNavItem = ({ view, label, icon: Icon }: { view: View, label: string, icon: any }) => (
     <button
       onClick={() => setActiveView(view)}
-      className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 rounded-xl mb-2 interactive-active ${
-        activeView === view ? 'active-nav font-bold shadow-lg shadow-blue-500/10' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+      className={`w-full flex items-center gap-4 px-6 py-4 transition-all duration-300 rounded-2xl mb-2 interactive-active ${
+        activeView === view ? 'bg-blue-600/10 text-blue-500 font-bold shadow-lg shadow-blue-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
       }`}
     >
-      {icon}
+      <Icon />
       <span className="text-sm tracking-wide">{label}</span>
     </button>
   );
 
-  const TabItem = ({ view, label, icon }: { view: View, label: string, icon: React.ReactNode }) => (
+  const TabItem = ({ view, label, icon: Icon }: { view: View, label: string, icon: any }) => (
     <button
       onClick={() => setActiveView(view)}
-      className={`flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 interactive-active ${
+      className={`flex-1 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 interactive-active ${
         activeView === view ? 'text-blue-500' : 'text-slate-500'
       }`}
-      style={{ height: '56px' }} // Thumb-friendly height
+      style={{ height: '64px' }}
     >
-      {icon}
-      <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+      <div className={`transition-transform duration-300 ${activeView === view ? 'scale-110' : 'scale-100'}`}>
+        <Icon />
+      </div>
+      <span className="text-[9px] font-black uppercase tracking-[0.15em]">{label}</span>
     </button>
   );
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden">
-      {/* Sidebar Navigation (Desktop only) */}
       <aside className="w-72 glass border-r border-white/5 fixed inset-y-0 left-0 hidden xl:flex flex-col p-8 z-50">
         <div className="flex items-center gap-4 mb-12">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-xl font-bold text-white shadow-xl shadow-blue-500/20">D</div>
+          <div className="w-12 h-12 rounded-[30%] bg-blue-600 flex items-center justify-center text-xl font-black text-white shadow-xl shadow-blue-500/20">D</div>
           <h1 className="text-2xl font-extrabold tracking-tighter">Drahmi</h1>
         </div>
         
         <nav className="flex-1">
-          <SideNavItem view="home" label="Dashboard" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>} />
-          <SideNavItem view="history" label="Activity" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>} />
-          <SideNavItem view="debts" label="Vault" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857"/></svg>} />
-          <SideNavItem view="settings" label="Account" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>} />
+          <SideNavItem view="home" label="Dashboard" icon={Icons.Home} />
+          <SideNavItem view="history" label="Activity" icon={Icons.History} />
+          <SideNavItem view="savings" label="Savings" icon={Icons.Savings} />
+          <SideNavItem view="debts" label="Vault" icon={Icons.Vault} />
+          <SideNavItem view="settings" label="Account" icon={Icons.Profile} />
         </nav>
-
-        <div className="pt-8 border-t border-white/5 mt-auto">
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold">{user.email?.charAt(0).toUpperCase()}</div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-bold truncate">{user.email?.split('@')[0]}</p>
-              <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Pro Member</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 xl:ml-72 px-4 md:px-12 lg:px-20 pt-8 pb-32 safe-area-pt">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-1">Drahmi</h2>
-            <p className="text-slate-500 font-medium text-sm">Wealth Command Center</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-white mb-1">Drahmi</h2>
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">Wealth Command</p>
           </div>
           <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
-            <button 
-              onClick={() => setActiveModal('cash')}
-              className="h-12 px-4 glass rounded-xl text-xs font-bold border border-blue-500/20 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-2 interactive-active"
-            >
-              Set Reserve
+            <button onClick={() => setActiveModal('income')} className="h-14 px-5 glass rounded-2xl text-[10px] font-black uppercase tracking-widest border border-emerald-500/10 text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center justify-center gap-2 interactive-active">
+              <Icons.Plus /> Inflow
             </button>
-            <button 
-              onClick={() => setActiveModal('expense')}
-              className="h-12 px-4 bg-white text-slate-950 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all shadow-lg interactive-active"
-            >
-              Add Expense
+            <button onClick={() => setActiveModal('expense')} className="h-14 px-5 bg-white text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all shadow-lg interactive-active">
+              Outflow
             </button>
           </div>
         </header>
@@ -209,131 +241,180 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         <div className="max-w-6xl mx-auto space-y-10">
           {activeView === 'home' && (
             <>
-              {/* Balance Card */}
-              <div className="premium-card p-6 md:p-8 relative overflow-hidden flex flex-col shadow-2xl">
-                <div className="flex justify-between items-start mb-6">
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Net Assets</p>
-                  <div className="w-8 h-5 bg-white/10 rounded-md border border-white/5 flex items-center justify-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full blur-[2px] animate-pulse"></div>
-                  </div>
-                </div>
-                
-                <h3 className="text-4xl md:text-5xl font-extrabold tracking-tighter mb-8 break-all">
-                  <span className="text-blue-500 mr-2 text-xl md:text-2xl font-medium">DA</span>
+              <div className="premium-card p-8 md:p-10 relative overflow-hidden flex flex-col shadow-2xl">
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] mb-8">Asset Portfolio</p>
+                <h3 className="text-5xl md:text-6xl font-black tracking-tighter mb-10 break-all leading-none">
+                  <span className="text-blue-500 mr-2 text-2xl font-bold">DA</span>
                   {stats.netBalance.toLocaleString()}
                 </h3>
-                
-                <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-6 mt-auto">
-                  <div>
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Liquid Reserve</p>
-                    <p className="text-lg font-bold text-slate-100">{stats.totalCash.toLocaleString()}</p>
+                <div className="grid grid-cols-3 gap-6 border-t border-white/5 pt-8 mt-auto">
+                  <div className="flex flex-col">
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">Liquid</p>
+                    <p className="text-xl font-bold text-white">{stats.totalCash.toLocaleString()}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Credit Delta</p>
-                    <p className={`text-lg font-bold ${(stats.totalOwedToMe - stats.totalIOwe) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <div className="flex flex-col">
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">Vault</p>
+                    <p className="text-xl font-bold text-emerald-400">{stats.totalSavings.toLocaleString()}</p>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-2">Credit</p>
+                    <p className={`text-xl font-bold ${(stats.totalOwedToMe - stats.totalIOwe) >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
                       {(stats.totalOwedToMe - stats.totalIOwe).toLocaleString()}
                     </p>
                   </div>
                 </div>
-                
-                {/* Decorative Orb */}
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-[60px] pointer-events-none"></div>
               </div>
 
-              {/* Fast Metrics */}
-              <div className="grid grid-cols-2 gap-4">
-                <div onClick={() => setActiveModal('income')} className="premium-card p-5 border-emerald-500/10 bg-emerald-500/[0.03] interactive-active cursor-pointer">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/></svg>
+              {goals.length > 0 && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between px-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Active Goals</h4>
+                    <button onClick={() => setActiveView('savings')} className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">Vault Access</button>
                   </div>
-                  <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Inflow</p>
-                  <p className="text-lg font-bold text-white">+{stats.totalIncome.toLocaleString()}</p>
-                </div>
-                <div onClick={() => setActiveModal('expense')} className="premium-card p-5 border-rose-500/10 bg-rose-500/[0.03] interactive-active cursor-pointer">
-                  <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center mb-3">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4"/></svg>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {goals.filter(g => g.status === 'active').slice(0, 2).map(goal => {
+                      const progress = Math.min((goal.saved_amount / goal.target_amount) * 100, 100);
+                      return (
+                        <div key={goal.id} className="premium-card p-6 border-emerald-500/10">
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="font-bold text-base text-white">{goal.name}</span>
+                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{progress.toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full bg-white/5 h-2.5 rounded-full mb-4 overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(16,185,129,0.3)]" style={{ width: `${progress}%` }}></div>
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Target: {goal.target_amount.toLocaleString()} DA</p>
+                        </div>
+                      )
+                    })}
                   </div>
-                  <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Outflow</p>
-                  <p className="text-lg font-bold text-white">-{stats.totalExpenses.toLocaleString()}</p>
                 </div>
-              </div>
+              )}
 
-              {/* Recent Activity Mini-List */}
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between px-2">
-                   <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Recent Activity</h4>
-                   <button onClick={() => setActiveView('history')} className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">History</button>
+                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Global Ledger</h4>
                 </div>
                 <TransactionList title="" incomes={incomes.slice(0, 3)} expenses={expenses.slice(0, 3)} onRefresh={fetchData} />
               </div>
             </>
           )}
 
-          {activeView === 'history' && (
-            <div className="animate-fade-up">
-               <TransactionList title="Transaction Ledger" incomes={incomes} expenses={expenses} onRefresh={fetchData} />
+          {activeView === 'savings' && (
+            <div className="space-y-10 animate-fade-up">
+              <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-black text-white tracking-tighter">Savings Vault</h2>
+                <button onClick={() => setActiveModal('savings_goal')} className="h-12 px-6 bg-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 interactive-active">Init Goal</button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {goals.map(goal => {
+                  const progress = Math.min((goal.saved_amount / goal.target_amount) * 100, 100);
+                  const remaining = goal.target_amount - goal.saved_amount;
+                  const estMonths = goal.monthly_amount > 0 ? Math.ceil(remaining / goal.monthly_amount) : '∞';
+                  
+                  return (
+                    <div key={goal.id} className={`premium-card p-8 flex flex-col relative overflow-hidden transition-all duration-500 ${goal.status === 'completed' ? 'border-emerald-500/50 scale-[1.02]' : ''}`}>
+                      {goal.status === 'completed' && (
+                         <div className="absolute top-6 right-6 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest shadow-xl">COMPLETED</div>
+                      )}
+                      
+                      <div className="mb-8">
+                        <h4 className="text-2xl font-black text-white mb-2">{goal.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                          <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Auto-Deduct: {goal.monthly_amount.toLocaleString()} DA / MO</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline gap-2 mb-4">
+                         <span className="text-4xl font-black text-white tracking-tighter">{goal.saved_amount.toLocaleString()}</span>
+                         <span className="text-slate-500 text-sm font-bold">/ {goal.target_amount.toLocaleString()} DA</span>
+                      </div>
+
+                      <div className="w-full bg-white/5 h-5 rounded-full mb-8 overflow-hidden p-1">
+                        <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(16,185,129,0.4)]" style={{ width: `${progress}%` }}></div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 mt-auto pt-8 border-t border-white/5">
+                        <div className="flex flex-col">
+                           <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1.5">Maturity</p>
+                           <p className="text-sm font-bold text-slate-100">{goal.status === 'completed' ? 'Realized' : `~ ${estMonths} Months`}</p>
+                        </div>
+                        <div className="flex flex-col text-right">
+                           <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1.5">Status</p>
+                           <p className={`text-sm font-bold uppercase tracking-widest ${goal.status === 'active' ? 'text-blue-500' : 'text-emerald-500'}`}>{goal.status}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {goals.length === 0 && (
+                <div className="text-center py-28 glass rounded-[40px] border-dashed border-2 border-white/5">
+                  <div className="w-20 h-20 bg-white/5 rounded-[30%] flex items-center justify-center mx-auto mb-6 opacity-30">
+                    <Icons.Savings />
+                  </div>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Awaiting Goal Definitions</p>
+                </div>
+              )}
             </div>
           )}
 
+          {activeView === 'history' && <TransactionList title="Temporal Activity" incomes={incomes} expenses={expenses} onRefresh={fetchData} />}
           {activeView === 'debts' && (
-            <div className="space-y-6 animate-fade-up">
-               <div className="premium-card p-6">
-                  <h2 className="text-xl font-bold mb-6 tracking-tight">Accounts Receivable</h2>
-                  <div className="space-y-3">
-                    {debts.filter(d => d.type === 'owe_me').length === 0 ? <p className="text-slate-600 text-xs italic py-4">No receivables.</p> :
+            <div className="space-y-8 animate-fade-up">
+               <div className="premium-card p-8">
+                  <h2 className="text-xl font-black mb-8 tracking-tighter text-emerald-400 uppercase tracking-widest">Receivables</h2>
+                  <div className="space-y-4">
+                    {debts.filter(d => d.type === 'owe_me').length === 0 ? <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest text-center py-8">Zero exposure.</p> :
                       debts.filter(d => d.type === 'owe_me').map(debt => (
-                        <div key={debt.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
-                          <span className="font-bold text-sm">{debt.person?.name}</span>
-                          <span className="text-emerald-400 font-bold text-sm">+{debt.amount.toLocaleString()}</span>
+                        <div key={debt.id} className="flex items-center justify-between p-5 rounded-2xl bg-white/[0.03] border border-white/5">
+                          <span className="font-bold text-sm text-white">{debt.person?.name}</span>
+                          <span className="text-emerald-400 font-black text-sm tracking-tight">+{debt.amount.toLocaleString()}</span>
                         </div>
                       ))
                     }
                   </div>
                </div>
-               <div className="premium-card p-6">
-                  <h2 className="text-xl font-bold mb-6 tracking-tight">Accounts Payable</h2>
-                  <div className="space-y-3">
-                    {debts.filter(d => d.type === 'i_owe').length === 0 ? <p className="text-slate-600 text-xs italic py-4">No payables.</p> :
+               <div className="premium-card p-8">
+                  <h2 className="text-xl font-black mb-8 tracking-tighter text-rose-400 uppercase tracking-widest">Liabilities</h2>
+                  <div className="space-y-4">
+                    {debts.filter(d => d.type === 'i_owe').length === 0 ? <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest text-center py-8">No obligations.</p> :
                       debts.filter(d => d.type === 'i_owe').map(debt => (
-                        <div key={debt.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
-                          <span className="font-bold text-sm">{debt.person?.name}</span>
-                          <span className="text-amber-400 font-bold text-sm">-{debt.amount.toLocaleString()}</span>
+                        <div key={debt.id} className="flex items-center justify-between p-5 rounded-2xl bg-white/[0.03] border border-white/5">
+                          <span className="font-bold text-sm text-white">{debt.person?.name}</span>
+                          <span className="text-rose-400 font-black text-sm tracking-tight">-{debt.amount.toLocaleString()}</span>
                         </div>
                       ))
                     }
                   </div>
                </div>
-               <button onClick={() => setActiveModal('debt')} className="w-full h-14 bg-blue-600 rounded-2xl font-black uppercase tracking-widest text-xs text-white interactive-active">
-                 Register Obligation
-               </button>
+               <button onClick={() => setActiveModal('debt')} className="w-full h-16 bg-blue-600 rounded-3xl font-black uppercase tracking-[0.2em] text-[10px] text-white shadow-xl shadow-blue-500/20 interactive-active">Register Instrument</button>
             </div>
           )}
-
           {activeView === 'settings' && (
             <div className="max-w-xl mx-auto animate-fade-up">
-               <div className="premium-card p-8 text-center flex flex-col items-center shadow-xl">
-                  <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-3xl flex items-center justify-center text-3xl font-black shadow-lg mb-8 rotate-3">
+               <div className="premium-card p-10 text-center flex flex-col items-center shadow-2xl">
+                  <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-[35%] flex items-center justify-center text-4xl font-black mb-8 rotate-3 shadow-2xl">
                     {user.email?.charAt(0).toUpperCase()}
                   </div>
-                  <h3 className="text-2xl font-bold mb-1 tracking-tight">{user.email?.split('@')[0]}</h3>
-                  <p className="text-slate-500 text-sm mb-10">{user.email}</p>
-                  
-                  <div className="w-full space-y-3">
-                    <button className="w-full h-12 glass rounded-xl text-xs font-black uppercase tracking-widest interactive-active">Settings</button>
-                    <button onClick={() => supabase.auth.signOut()} className="w-full h-12 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-xl text-xs font-black uppercase tracking-widest interactive-active">Sign Out</button>
-                  </div>
+                  <h3 className="text-3xl font-black mb-1 tracking-tighter">{user.email?.split('@')[0]}</h3>
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mb-12">{user.email}</p>
+                  <button onClick={() => supabase.auth.signOut()} className="w-full h-16 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-3xl text-[10px] font-black uppercase tracking-[0.3em] interactive-active">Terminate Session</button>
                </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Mobile Native-Style Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 xl:hidden glass border-t border-white/5 z-[60] pb-safe flex px-2 bg-slate-950/80">
-        <TabItem view="home" label="Home" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>} />
-        <TabItem view="history" label="Activity" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>} />
-        <TabItem view="debts" label="Vault" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857"/></svg>} />
-        <TabItem view="settings" label="Profile" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>} />
+      <nav className="fixed bottom-0 left-0 right-0 xl:hidden glass border-t border-white/5 z-[60] pb-safe flex px-3 bg-[#020617]/90">
+        <TabItem view="home" label="Core" icon={Icons.Home} />
+        <TabItem view="history" label="Ledger" icon={Icons.History} />
+        <TabItem view="savings" label="Vault" icon={Icons.Savings} />
+        <TabItem view="debts" label="Credit" icon={Icons.Vault} />
+        <TabItem view="settings" label="Profile" icon={Icons.Profile} />
       </nav>
 
       {activeModal && <Modal type={activeModal} people={people} onClose={() => setActiveModal(null)} onSuccess={() => { setActiveModal(null); fetchData(); }} />}

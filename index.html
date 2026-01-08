@@ -24,6 +24,7 @@
         :root {
             --primary: #3b82f6;
             --bg: #020617;
+            --accent-green: #10b981;
         }
 
         * {
@@ -31,16 +32,23 @@
             box-sizing: border-box;
         }
 
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg);
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg);
             color: #f8fafc;
             margin: 0;
-            overflow-x: hidden;
             overscroll-behavior-y: none;
-            /* Support for iOS Safe Areas */
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        #root {
+            height: 100%;
         }
 
         .mesh-bg {
@@ -59,40 +67,43 @@
         }
 
         .glass {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(32px) saturate(210%);
+            -webkit-backdrop-filter: blur(32px) saturate(210%);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .premium-card {
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            border-radius: 24px;
+            background: linear-gradient(165deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            border-radius: 28px;
         }
 
-        /* Thumb-friendly interactions */
+        .icon-vault {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            box-shadow: inset 0 0 10px rgba(255,255,255,0.05);
+        }
+
         .interactive-active:active {
-            transform: scale(0.96);
-            transition: transform 0.1s ease;
+            transform: scale(0.94);
+            transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
         }
 
-        @keyframes slideUp {
-            from { transform: translateY(100%); }
-            to { transform: translateY(0); }
-        }
-
-        .animate-bottom-sheet {
-            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        /* Hide Scrollbars */
-        ::-webkit-scrollbar { width: 0; display: none; }
-        
-        /* Utility for safe areas in Tailwind doesn't always handle env() well without custom classes */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .pt-safe { padding-top: env(safe-area-inset-top); }
+        .h-safe { height: env(safe-area-inset-bottom); }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
     </style>
 <script type="importmap">
 {
@@ -106,12 +117,6 @@
 </script>
 </head>
 <body>
-    <noscript>
-        <div style="text-align: center; padding: 50px; color: white; background: #020617; height: 100vh;">
-            <h1>JavaScript Required</h1>
-            <p>Drahmi requires JavaScript to function securely. Please enable it in your browser settings.</p>
-        </div>
-    </noscript>
     <div class="mesh-bg"></div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

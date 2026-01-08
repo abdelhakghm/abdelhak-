@@ -43,6 +43,18 @@ export interface Debt {
   person?: Person;
 }
 
+export interface SavingsGoal {
+  id: string;
+  user_id: string;
+  name: string;
+  target_amount: number;
+  monthly_amount: number;
+  saved_amount: number;
+  start_date: string;
+  last_deduction_date: string | null;
+  status: 'active' | 'completed';
+}
+
 export interface DashboardStats {
   totalCash: number;
   totalIncome: number;
@@ -50,4 +62,5 @@ export interface DashboardStats {
   totalOwedToMe: number;
   totalIOwe: number;
   netBalance: number;
+  totalSavings: number;
 }

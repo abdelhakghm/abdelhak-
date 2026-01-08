@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 const Auth: React.FC = () => {
-  const [isRightPanelActive, setIsRightPanelActive] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,7 +29,7 @@ const Auth: React.FC = () => {
     try {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Account created! Please check your email.' });
+      setMessage({ type: 'success', text: 'Account created! Check your email.' });
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message });
     } finally {
@@ -37,125 +37,108 @@ const Auth: React.FC = () => {
     }
   };
 
-  const togglePanel = () => {
-    setIsRightPanelActive(!isRightPanelActive);
-    setMessage(null);
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 sm:p-12">
-      <div className={`auth-container glass-card ${isRightPanelActive ? 'right-panel-active' : ''}`}>
-        
-        {/* Sign Up */}
-        <div className="form-container sign-up-container flex items-center justify-center bg-slate-900/20 p-8 sm:p-12">
-          <form onSubmit={handleSignUp} className="w-full max-w-sm space-y-6">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-bold tracking-tight text-white mb-2">Join Drahmi</h2>
-              <p className="text-slate-400 text-sm">Start your financial journey today.</p>
-            </div>
-            
-            <div className="space-y-4">
-              <input
-                type="email" required placeholder="Email address"
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-              />
-              <input
-                type="password" required minLength={6} placeholder="Secure password"
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-                value={password} onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            
-            <button
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-blue-500/20 transition-all transform active:scale-95 disabled:opacity-50"
-            >
-              {loading ? 'Creating...' : 'Register'}
-            </button>
-            
-            <p className="sm:hidden text-center text-slate-500 text-sm">
-              Already have an account? <button type="button" onClick={togglePanel} className="text-blue-400 font-bold">Log In</button>
-            </p>
+    <div className="min-h-screen flex flex-col justify-end bg-[#020617] relative overflow-hidden">
+      {/* Immersive Background Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[40%] bg-blue-600/20 blur-[120px] rounded-full animate-pulse"></div>
+      <div className="absolute top-[20%] right-[-10%] w-[60%] h-[30%] bg-indigo-600/10 blur-[100px] rounded-full"></div>
 
-            {message && (
-              <p className={`text-xs text-center p-3 rounded-xl ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                {message.text}
-              </p>
-            )}
-          </form>
+      {/* Hero Brand Section */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 pt-safe">
+        <div className="w-20 h-20 bg-blue-600 rounded-[28%] flex items-center justify-center shadow-2xl shadow-blue-500/40 mb-8 rotate-[-3deg] transition-transform hover:rotate-0 duration-500">
+          <span className="text-white text-4xl font-black italic tracking-tighter">D</span>
+        </div>
+        <h1 className="text-5xl font-black text-white tracking-tighter mb-4 text-center">
+          Drahmi<span className="text-blue-500">.</span>
+        </h1>
+        <p className="text-slate-400 text-lg font-medium text-center max-w-[280px] leading-snug">
+          Command your wealth with precision.
+        </p>
+      </div>
+
+      {/* Modern Interaction Card */}
+      <div className="glass rounded-t-[48px] p-8 pb-12 shadow-[0_-20px_80px_rgba(0,0,0,0.5)] border-t border-white/10 relative z-10 animate-bottom-sheet">
+        <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-10"></div>
+
+        <div className="mb-8">
+          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-2">
+            {isRegistering ? 'Create Profile' : 'Sign In'}
+          </h2>
+          <p className="text-slate-500 text-sm font-semibold tracking-wide uppercase">
+            {isRegistering ? 'Join the wealth ecosystem' : 'Access your command center'}
+          </p>
         </div>
 
-        {/* Sign In */}
-        <div className="form-container sign-in-container flex items-center justify-center bg-slate-900/20 p-8 sm:p-12">
-          <form onSubmit={handleSignIn} className="w-full max-w-sm space-y-6">
-            <div className="text-center mb-10">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-blue-600/10 mb-6">
-                <svg className="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-              </div>
-              <h2 className="text-3xl font-bold tracking-tight text-white mb-2">Welcome Back</h2>
-              <p className="text-slate-400 text-sm">Log in to manage your money.</p>
-            </div>
-            
-            <div className="space-y-4">
+        <form onSubmit={isRegistering ? handleSignUp : handleSignIn} className="space-y-4">
+          <div className="space-y-3">
+            <div className="relative">
               <input
-                type="email" required placeholder="Email address"
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-              />
-              <input
-                type="password" required placeholder="Password"
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-600"
-                value={password} onChange={(e) => setPassword(e.target.value)}
+                type="email"
+                required
+                placeholder="Apple ID or Email"
+                className="w-full h-16 bg-white/[0.03] border border-white/5 rounded-2xl px-6 text-white text-lg outline-none focus:bg-white/[0.07] focus:border-blue-500/50 transition-all placeholder:text-slate-600 font-medium"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            
-            <button
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-blue-500/20 transition-all transform active:scale-95 disabled:opacity-50"
-            >
-              {loading ? 'Authenticating...' : 'Sign In'}
-            </button>
-
-            <p className="sm:hidden text-center text-slate-500 text-sm">
-              New to Drahmi? <button type="button" onClick={togglePanel} className="text-blue-400 font-bold">Register</button>
-            </p>
-
-            {message && (
-              <p className="text-xs text-rose-400 text-center bg-rose-500/10 p-3 rounded-xl">
-                {message.text}
-              </p>
-            )}
-          </form>
-        </div>
-
-        {/* Overlay */}
-        <div className="overlay-container">
-          <div className="overlay">
-            <div className="overlay-panel overlay-left">
-              <h1 className="text-4xl font-extrabold mb-4 tracking-tight">Got Account?</h1>
-              <p className="mb-8 text-blue-100/80 leading-relaxed">Securely log back into your dashboard and check your balances.</p>
-              <button 
-                onClick={togglePanel}
-                className="bg-white/10 border-2 border-white/30 text-white font-bold py-3 px-10 rounded-2xl hover:bg-white hover:text-blue-900 transition-all"
-              >
-                Log In
-              </button>
-            </div>
-            <div className="overlay-panel overlay-right">
-              <h1 className="text-4xl font-extrabold mb-4 tracking-tight">First Time?</h1>
-              <p className="mb-8 text-blue-100/80 leading-relaxed">Join thousands of users who track their wealth with Drahmi's simple ecosystem.</p>
-              <button 
-                onClick={togglePanel}
-                className="bg-white/10 border-2 border-white/30 text-white font-bold py-3 px-10 rounded-2xl hover:bg-white hover:text-blue-900 transition-all"
-              >
-                Get Started
-              </button>
+            <div className="relative">
+              <input
+                type="password"
+                required
+                placeholder="Security Password"
+                className="w-full h-16 bg-white/[0.03] border border-white/5 rounded-2xl px-6 text-white text-lg outline-none focus:bg-white/[0.07] focus:border-blue-500/50 transition-all placeholder:text-slate-600 font-medium"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
           </div>
-        </div>
 
+          {message && (
+            <div className={`p-4 rounded-2xl text-sm font-bold text-center animate-pulse ${
+              message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+            }`}>
+              {message.text}
+            </div>
+          )}
+
+          <div className="pt-4 space-y-4">
+            <button
+              disabled={loading}
+              className="w-full h-16 bg-white text-slate-950 font-black text-lg rounded-2xl shadow-xl hover:bg-slate-200 transition-all active:scale-[0.97] disabled:opacity-50 uppercase tracking-widest"
+            >
+              {loading ? 'Validating...' : isRegistering ? 'Register' : 'Authorize'}
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setMessage(null);
+              }}
+              className="w-full py-4 text-slate-400 font-bold text-sm hover:text-white transition-colors"
+            >
+              {isRegistering ? (
+                <>Already a member? <span className="text-blue-500 ml-1">Log in</span></>
+              ) : (
+                <>New to the ecosystem? <span className="text-blue-500 ml-1">Create account</span></>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* Home Indicator safe area */}
+        <div className="h-safe sm:hidden"></div>
       </div>
+      
+      <style>{`
+        @keyframes bottomSheet {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-bottom-sheet {
+          animation: bottomSheet 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
     </div>
   );
 };
