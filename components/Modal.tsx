@@ -53,23 +53,24 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
             const lastDeduction = goal.last_deduction_date ? new Date(goal.last_deduction_date) : null;
             const lastMonthKey = lastDeduction ? `${lastDeduction.getFullYear()}-${lastDeduction.getMonth()}` : '';
 
-            // If a deduction hasn't happened this month
+            // If a deduction hasn't happened this month for this goal
             if (currentMonthKey !== lastMonthKey && goal.monthly_amount > 0) {
-              const deduction = Math.min(goal.monthly_amount, finalIncomeAmt);
-              const newSaved = goal.saved_amount + deduction;
-              
-              // Update the goal
-              await supabase.from('savings_goals').update({
-                saved_amount: newSaved,
-                last_deduction_date: today.toISOString(),
-                status: newSaved >= goal.target_amount ? 'completed' : 'active'
-              }).eq('id', goal.id);
+              const deduction = Math.min(Number(goal.monthly_amount), finalIncomeAmt);
+              if (deduction > 0) {
+                const newSaved = Number(goal.saved_amount) + deduction;
+                
+                await supabase.from('savings_goals').update({
+                  saved_amount: newSaved,
+                  last_deduction_date: today.toISOString(),
+                  status: newSaved >= Number(goal.target_amount) ? 'completed' : 'active'
+                }).eq('id', goal.id);
 
-              finalIncomeAmt -= deduction;
-              setDeductionNotice(`${deduction.toLocaleString()} DA diverted to "${goal.name}"`);
-              
-              // Only one goal deduction per income for simplicity in this MVP
-              break;
+                finalIncomeAmt -= deduction;
+                setDeductionNotice(`${deduction.toLocaleString()} DA diverted to "${goal.name}"`);
+                // Wait briefly so the user sees the animation/notice
+                await new Promise(r => setTimeout(r, 1200));
+              }
+              break; // Deduced from one goal per income for simplicity
             }
           }
         }
@@ -80,16 +81,12 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
           source: formData.source, 
           date: formData.date 
         }]);
-        
-        if (deductionNotice) {
-          await new Promise(r => setTimeout(r, 1500)); // Show notice briefly
-        }
       } 
       else if (type === 'expense') {
         await supabase.from('expenses').insert([{ user_id: user.id, title: formData.title, amount: amt, category: formData.category, date: formData.date }]);
       } 
       else if (type === 'cash') {
-        const { data: existing } = await supabase.from('cash').select('*').single();
+        const { data: existing } = await supabase.from('cash').select('*').eq('user_id', user.id).maybeSingle();
         if (existing) {
           await supabase.from('cash').update({ amount: amt, updated_at: new Date().toISOString() }).eq('id', existing.id);
         } else {
@@ -119,8 +116,9 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
       }
 
       onSuccess();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Submission error:", err);
+      alert("Command failed: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -136,7 +134,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-2xl font-extrabold tracking-tighter text-white capitalize">{type.replace('_', ' ')}</h2>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Command entry</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Registry Entry</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 glass rounded-xl text-slate-500 hover:text-white flex items-center justify-center interactive-active">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -144,33 +142,34 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         </div>
 
         {deductionNotice && (
-          <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-pulse">
-            <p className="text-emerald-400 text-xs font-bold text-center">✨ Smart Saving: {deductionNotice}</p>
+          <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-fade-in">
+            <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest text-center">✨ Smart Saving Applied</p>
+            <p className="text-white text-xs font-bold text-center mt-1">{deductionNotice}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {type === 'savings_goal' ? (
-            <>
+            <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Goal Designation</label>
-                <input required type="text" placeholder="e.g., iPhone 16 Pro" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.goal_name} onChange={e => setFormData({...formData, goal_name: e.target.value})} />
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Objective Name</label>
+                <input required type="text" placeholder="e.g., MacBook M3" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.goal_name} onChange={e => setFormData({...formData, goal_name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Target (DA)</label>
-                    <input required type="number" placeholder="120000" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.target_amount} onChange={e => setFormData({...formData, target_amount: e.target.value})} />
+                    <input required type="number" placeholder="250000" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.target_amount} onChange={e => setFormData({...formData, target_amount: e.target.value})} />
                  </div>
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Monthly (DA)</label>
-                    <input required type="number" placeholder="5000" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.monthly_amount} onChange={e => setFormData({...formData, monthly_amount: e.target.value})} />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Auto-Save (DA/mo)</label>
+                    <input required type="number" placeholder="10000" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.monthly_amount} onChange={e => setFormData({...formData, monthly_amount: e.target.value})} />
                  </div>
               </div>
-            </>
+            </div>
           ) : (
             <>
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Magnitude (DA)</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Volume (DA)</label>
                 <input 
                   required type="number" step="0.01" placeholder="0.00"
                   className="w-full h-20 glass border-white/10 rounded-2xl px-6 text-4xl font-black text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-800 tracking-tighter"
@@ -181,19 +180,19 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {type === 'income' && (
                   <div className="space-y-2 col-span-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Asset Source</label>
-                    <input required type="text" placeholder="Employer, Freelance, etc." className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Origin</label>
+                    <input required type="text" placeholder="Salary, Gift, Sale..." className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} />
                   </div>
                 )}
 
                 {type === 'expense' && (
                   <>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Recipient</label>
-                      <input required type="text" placeholder="Vendor" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Descriptor</label>
+                      <input required type="text" placeholder="Item or Service" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Category</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Sector</label>
                       <select className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 appearance-none bg-slate-900" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
                         <option>Lifestyle</option><option>Vitals</option><option>Fixed Assets</option><option>Infrastructure</option><option>Misc</option>
                       </select>
@@ -204,20 +203,20 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
                 {type === 'debt' && (
                   <>
                     <div className="space-y-2 col-span-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Entity Name</label>
-                      <input required type="text" placeholder="Individual" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.person_name} onChange={e => setFormData({...formData, person_name: e.target.value})} />
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Counterparty</label>
+                      <input required type="text" placeholder="Person or Org Name" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.person_name} onChange={e => setFormData({...formData, person_name: e.target.value})} />
                     </div>
                     <div className="grid grid-cols-2 gap-3 col-span-2">
-                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'owe_me'})} className={`h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all interactive-active ${formData.debt_type === 'owe_me' ? 'bg-emerald-600 text-white border-emerald-600' : 'glass text-slate-500 border-white/10'}`}>Credit (+)</button>
-                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'i_owe'})} className={`h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all interactive-active ${formData.debt_type === 'i_owe' ? 'bg-rose-600 text-white border-rose-600' : 'glass text-slate-500 border-white/10'}`}>Debt (-)</button>
+                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'owe_me'})} className={`h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all interactive-active ${formData.debt_type === 'owe_me' ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/20' : 'glass text-slate-500 border-white/10'}`}>Asset (+)</button>
+                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'i_owe'})} className={`h-12 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all interactive-active ${formData.debt_type === 'i_owe' ? 'bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-500/20' : 'glass text-slate-500 border-white/10'}`}>Liability (-)</button>
                     </div>
                   </>
                 )}
 
                 {type !== 'cash' && (
                   <div className="space-y-2 col-span-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Date</label>
-                    <input required type="date" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Execution Date</label>
+                    <input required type="date" className="w-full h-14 glass rounded-xl px-4 text-white outline-none border-white/5 focus:border-blue-500/50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
                   </div>
                 )}
               </div>
@@ -229,7 +228,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
               type="submit" disabled={loading}
               className="w-full h-16 bg-white text-slate-950 font-black text-sm rounded-2xl shadow-xl hover:bg-slate-200 transition-all disabled:opacity-50 uppercase tracking-[0.2em] interactive-active"
             >
-              {loading ? 'Processing...' : 'Commit entry'}
+              {loading ? 'Authenticating...' : 'Commit Command'}
             </button>
           </div>
           <div className="h-safe sm:hidden"></div>

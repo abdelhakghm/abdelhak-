@@ -10,7 +10,6 @@ export interface Income {
   id: string;
   user_id: string;
   amount: number;
-  currency: string;
   source: string;
   date: string;
   created_at: string;
@@ -40,6 +39,7 @@ export interface Debt {
   amount: number;
   type: 'owe_me' | 'i_owe';
   date: string;
+  created_at: string;
   person?: Person;
 }
 
@@ -53,6 +53,7 @@ export interface SavingsGoal {
   start_date: string;
   last_deduction_date: string | null;
   status: 'active' | 'completed';
+  created_at: string;
 }
 
 export interface DashboardStats {
