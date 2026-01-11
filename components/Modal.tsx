@@ -27,6 +27,28 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
     monthly_amount: ''
   });
 
+  const updateLiquidCash = async (userId: string, adjustment: number) => {
+    const { data: currentCash } = await supabase
+      .from('cash')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (currentCash) {
+      await supabase
+        .from('cash')
+        .update({ 
+          amount: Number(currentCash.amount) + adjustment,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', currentCash.id);
+    } else {
+      await supabase
+        .from('cash')
+        .insert([{ user_id: userId, amount: adjustment }]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -35,6 +57,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
       if (!user) return;
 
       const amt = parseFloat(formData.amount);
+      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.");
 
       if (type === 'income') {
         let finalIncomeAmt = amt;
@@ -53,7 +76,6 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
             const lastDeduction = goal.last_deduction_date ? new Date(goal.last_deduction_date) : null;
             const lastMonthKey = lastDeduction ? `${lastDeduction.getFullYear()}-${lastDeduction.getMonth()}` : '';
 
-            // If a deduction hasn't happened this month for this goal
             if (currentMonthKey !== lastMonthKey && goal.monthly_amount > 0) {
               const deduction = Math.min(Number(goal.monthly_amount), finalIncomeAmt);
               if (deduction > 0) {
@@ -67,13 +89,15 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
 
                 finalIncomeAmt -= deduction;
                 setDeductionNotice(`${deduction.toLocaleString()} DA diverted to "${goal.name}"`);
-                // Wait briefly so the user sees the animation/notice
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 800));
               }
-              break; // Deduced from one goal per income for simplicity
+              break; 
             }
           }
         }
+
+        // Add to Liquid Cash
+        await updateLiquidCash(user.id, finalIncomeAmt);
 
         await supabase.from('incomes').insert([{ 
           user_id: user.id, 
@@ -83,9 +107,19 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         }]);
       } 
       else if (type === 'expense') {
-        await supabase.from('expenses').insert([{ user_id: user.id, title: formData.title, amount: amt, category: formData.category, date: formData.date }]);
+        // Subtract from Liquid Cash
+        await updateLiquidCash(user.id, -amt);
+
+        await supabase.from('expenses').insert([{ 
+          user_id: user.id, 
+          title: formData.title, 
+          amount: amt, 
+          category: formData.category, 
+          date: formData.date 
+        }]);
       } 
       else if (type === 'cash') {
+        // Direct override of liquid cash
         const { data: existing } = await supabase.from('cash').select('*').eq('user_id', user.id).maybeSingle();
         if (existing) {
           await supabase.from('cash').update({ amount: amt, updated_at: new Date().toISOString() }).eq('id', existing.id);
@@ -99,8 +133,21 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
           const { data: newPerson } = await supabase.from('people').insert([{ user_id: user.id, name: formData.person_name }]).select().single();
           pId = newPerson?.id;
         }
+        
         if (pId) {
-          await supabase.from('debts').insert([{ user_id: user.id, person_id: pId, amount: amt, type: formData.debt_type, date: formData.date }]);
+          // Adjust Cash based on debt type
+          // If I lend money (owe_me), cash goes DOWN.
+          // If I borrow money (i_owe), cash goes UP.
+          const adjustment = formData.debt_type === 'owe_me' ? -amt : amt;
+          await updateLiquidCash(user.id, adjustment);
+
+          await supabase.from('debts').insert([{ 
+            user_id: user.id, 
+            person_id: pId, 
+            amount: amt, 
+            type: formData.debt_type, 
+            date: formData.date 
+          }]);
         }
       }
       else if (type === 'savings_goal') {
@@ -228,7 +275,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
               type="submit" disabled={loading}
               className="w-full h-16 bg-white text-slate-950 font-black text-sm rounded-2xl shadow-xl hover:bg-slate-200 transition-all disabled:opacity-50 uppercase tracking-[0.2em] interactive-active"
             >
-              {loading ? 'Authenticating...' : 'Commit Command'}
+              {loading ? 'Processing Flux...' : 'Commit Command'}
             </button>
           </div>
           <div className="h-safe sm:hidden"></div>
