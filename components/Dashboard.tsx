@@ -54,6 +54,12 @@ const Icons = {
       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
       <path d="M3 3v5h5" />
     </svg>
+  ),
+  UserCircle: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
   )
 };
 
@@ -78,15 +84,9 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         supabase.from('incomes').select('*').order('date', { ascending: false }),
         supabase.from('expenses').select('*').order('date', { ascending: false }),
         supabase.from('debts').select('*, people(*)').order('date', { ascending: false }),
-        supabase.from('people').select('*'),
+        supabase.from('people').select('*').order('name', { ascending: true }),
         supabase.from('savings_goals').select('*').order('created_at', { ascending: false })
       ]);
-
-      // If no cash record exists yet, create one
-      if (!cash && !loading) {
-        const { data: newCash } = await supabase.from('cash').insert([{ user_id: user.id, amount: 0 }]).select().single();
-        if (newCash) setStats(prev => ({ ...prev, totalCash: 0 }));
-      }
 
       const totalCash = cash?.amount ? Number(cash.amount) : 0;
       const totalIncome = inc?.reduce((a, b) => a + Number(b.amount), 0) || 0;
@@ -105,7 +105,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     } finally { 
       setLoading(false); 
     }
-  }, [user.id]); // Removed 'loading' from dependencies to avoid potential loop
+  }, [user.id]);
 
   useEffect(() => {
     fetchData();
@@ -123,7 +123,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   };
 
   const deleteGoal = async (id: string) => {
-    if (!window.confirm('Dissolve this savings goal? Funds already saved are calculated in your net worth.')) return;
+    if (!window.confirm('Dissolve this savings goal?')) return;
     const { error } = await supabase.from('savings_goals').delete().eq('id', id);
     if (error) alert('Error: ' + error.message);
     else fetchData();
@@ -147,6 +147,13 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       <span className="text-[8px] font-black uppercase tracking-[0.1em]">{label}</span>
     </button>
   );
+
+  const getPersonBalance = (personId: string) => {
+    const personDebts = debts.filter(d => d.person_id === personId);
+    const owedToMe = personDebts.filter(d => d.type === 'owe_me').reduce((a, b) => a + Number(b.amount), 0);
+    const iOwe = personDebts.filter(d => d.type === 'i_owe').reduce((a, b) => a + Number(b.amount), 0);
+    return owedToMe - iOwe;
+  };
 
   if (loading && incomes.length === 0) {
     return (
@@ -203,25 +210,6 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
               </div>
             </div>
 
-            {goals.some(g => g.status === 'active') && (
-              <div className="space-y-3">
-                <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-1">Objectives</h4>
-                {goals.filter(g => g.status === 'active').slice(0, 2).map(goal => (
-                  <div key={goal.id} className="premium-card p-4">
-                    <div className="flex justify-between text-xs font-bold mb-2">
-                      <span className="text-white truncate max-w-[150px]">{goal.name}</span>
-                      <span className="text-emerald-400">
-                        {((Number(goal.saved_amount) / Number(goal.target_amount)) * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, (Number(goal.saved_amount) / Number(goal.target_amount)) * 100)}%` }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             <TransactionList title="Recent Flux" incomes={incomes.slice(0, 5)} expenses={expenses.slice(0, 5)} onRefresh={fetchData} />
           </div>
         )}
@@ -266,48 +254,85 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         )}
 
         {activeView === 'debts' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6 animate-fade-in pb-12">
+             <div className="flex justify-between items-center px-1">
+                <h2 className="text-xl font-black text-white">Counterparties</h2>
+                <button onClick={() => setActiveModal('debt')} className="h-8 px-4 bg-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest text-white interactive-active">Add Debt</button>
+             </div>
+
+             {/* People Summary Section */}
              <div className="premium-card p-5">
-                <h3 className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-4">Receivables</h3>
-                <div className="space-y-2">
-                  {debts.filter(d => d.type === 'owe_me').length === 0 && <p className="text-[10px] text-slate-700 italic">No outstanding credit.</p>}
-                  {debts.filter(d => d.type === 'owe_me').map(d => (
-                    <div key={d.id} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
-                      <div className="min-w-0">
-                        <span className="font-bold text-sm block truncate text-white">{d.person?.name}</span>
-                        <span className="text-[8px] text-slate-500 uppercase">{new Date(d.date).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-emerald-400 font-bold text-sm">+{Number(d.amount).toLocaleString()}</span>
-                        <button onClick={() => deleteDebt(d.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
-                          <Icons.Trash />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-4">Network Balance</h3>
+                <div className="space-y-4">
+                  {people.length === 0 ? (
+                    <p className="text-[10px] text-slate-600 italic text-center py-4">No counterparties recorded yet.</p>
+                  ) : (
+                    people.map(person => {
+                      const balance = getPersonBalance(person.id);
+                      return (
+                        <div key={person.id} className="flex items-center justify-between group">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400">
+                              <Icons.UserCircle />
+                            </div>
+                            <span className="font-bold text-sm text-white">{person.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-black ${balance > 0 ? 'text-emerald-400' : balance < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                              {balance > 0 ? '+' : ''}{balance.toLocaleString()} <span className="text-[10px]">DA</span>
+                            </p>
+                            <p className="text-[8px] text-slate-600 uppercase font-bold">
+                              {balance > 0 ? 'Owes You' : balance < 0 ? 'You Owe' : 'Settled'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
              </div>
-             <div className="premium-card p-5">
-                <h3 className="text-xs font-black uppercase tracking-widest text-rose-400 mb-4">Payables</h3>
-                <div className="space-y-2">
-                  {debts.filter(d => d.type === 'i_owe').length === 0 && <p className="text-[10px] text-slate-700 italic">No outstanding debt.</p>}
-                  {debts.filter(d => d.type === 'i_owe').map(d => (
-                    <div key={d.id} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
-                      <div className="min-w-0">
-                        <span className="font-bold text-sm block truncate text-white">{d.person?.name}</span>
-                        <span className="text-[8px] text-slate-500 uppercase">{new Date(d.date).toLocaleDateString()}</span>
+
+             {/* Receivables & Payables detail */}
+             <div className="grid grid-cols-1 gap-4">
+                <div className="premium-card p-5">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-4">Receivables (Owed to Me)</h3>
+                  <div className="space-y-2">
+                    {debts.filter(d => d.type === 'owe_me').length === 0 ? <p className="text-[10px] opacity-20 italic">None.</p> : debts.filter(d => d.type === 'owe_me').map(d => (
+                      <div key={d.id} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                        <div className="min-w-0">
+                          <span className="font-bold text-sm block truncate text-white">{d.person?.name || 'Unknown'}</span>
+                          <span className="text-[8px] text-slate-500 uppercase">{new Date(d.date).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-emerald-400 font-bold text-sm">+{Number(d.amount).toLocaleString()}</span>
+                          <button onClick={() => deleteDebt(d.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
+                            <Icons.Trash />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-rose-400 font-bold text-sm">-{Number(d.amount).toLocaleString()}</span>
-                        <button onClick={() => deleteDebt(d.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
-                          <Icons.Trash />
-                        </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="premium-card p-5">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-rose-400 mb-4">Payables (I Owe)</h3>
+                  <div className="space-y-2">
+                    {debts.filter(d => d.type === 'i_owe').length === 0 ? <p className="text-[10px] opacity-20 italic">None.</p> : debts.filter(d => d.type === 'i_owe').map(d => (
+                      <div key={d.id} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                        <div className="min-w-0">
+                          <span className="font-bold text-sm block truncate text-white">{d.person?.name || 'Unknown'}</span>
+                          <span className="text-[8px] text-slate-500 uppercase">{new Date(d.date).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-rose-400 font-bold text-sm">-{Number(d.amount).toLocaleString()}</span>
+                          <button onClick={() => deleteDebt(d.id)} className="p-2 text-slate-600 hover:text-rose-500 transition-colors">
+                            <Icons.Trash />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
              </div>
-             <button onClick={() => setActiveModal('debt')} className="w-full h-12 bg-blue-600 rounded-2xl font-black uppercase tracking-widest text-[9px] text-white interactive-active">New Entry</button>
           </div>
         )}
 
