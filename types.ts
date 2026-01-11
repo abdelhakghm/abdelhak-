@@ -48,7 +48,8 @@ export interface SavingsGoal {
   user_id: string;
   name: string;
   target_amount: number;
-  monthly_amount: number;
+  monthly_amount: number; // This serves as the 'recurring_amount'
+  frequency: 'daily' | 'monthly';
   saved_amount: number;
   start_date: string;
   last_deduction_date: string | null;
