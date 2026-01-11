@@ -73,41 +73,48 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         const amt = parseFloat(formData.amount);
         if (isNaN(amt)) throw new Error("Invalid amount");
         let cashToAddToLiquid = amt;
+        let totalDiverted = 0;
         
-        // 1. Check for due savings goals to Auto-Save
+        // Auto-Save Protocol Logic
         const { data: activeGoals, error: goalQueryError } = await supabase
           .from('savings_goals')
           .select('*')
           .eq('status', 'active')
           .eq('user_id', user.id);
 
-        if (goalQueryError) {
-            console.warn("Could not process auto-save goals:", goalQueryError.message);
-        } else if (activeGoals && activeGoals.length > 0) {
+        if (!goalQueryError && activeGoals && activeGoals.length > 0) {
           const today = new Date();
-          const todayKey = today.toISOString().split('T')[0];
-          const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
+          const todayStr = today.toISOString().split('T')[0];
 
           for (const goal of activeGoals as SavingsGoal[]) {
-            const lastDate = goal.last_deduction_date ? new Date(goal.last_deduction_date) : null;
+            const lastDate = goal.last_deduction_date ? new Date(goal.last_deduction_date) : new Date(goal.start_date);
             let isDue = false;
+            let multiplier = 1;
 
-            if (!lastDate) {
-              isDue = true;
+            if (goal.frequency === 'daily') {
+              const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+              const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              if (diffDays >= 1) {
+                isDue = true;
+                multiplier = diffDays;
+              }
             } else {
-              if (goal.frequency === 'daily') {
-                isDue = lastDate.toISOString().split('T')[0] !== todayKey;
-              } else {
-                const lastMonthKey = `${lastDate.getFullYear()}-${lastDate.getMonth()}`;
-                isDue = lastMonthKey !== monthKey;
+              // Monthly check
+              const isSameMonth = lastDate.getMonth() === today.getMonth() && lastDate.getFullYear() === today.getFullYear();
+              if (!isSameMonth) {
+                isDue = true;
               }
             }
 
             if (isDue && Number(goal.monthly_amount) > 0) {
-              const deduction = Math.min(Number(goal.monthly_amount), cashToAddToLiquid);
-              if (deduction > 0) {
-                const newSaved = Number(goal.saved_amount) + deduction;
-                
+              const singleDeduction = Number(goal.monthly_amount);
+              const totalRequired = singleDeduction * multiplier;
+              
+              // Only deduct if we have enough from this specific income
+              const actualDeduction = Math.min(totalRequired, cashToAddToLiquid);
+              
+              if (actualDeduction > 0) {
+                const newSaved = Number(goal.saved_amount) + actualDeduction;
                 const { error: updGoalErr } = await supabase.from('savings_goals').update({
                   saved_amount: newSaved,
                   last_deduction_date: today.toISOString(),
@@ -115,23 +122,27 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
                 }).eq('id', goal.id);
 
                 if (!updGoalErr) {
-                  cashToAddToLiquid -= deduction;
-                  setDeductionNotice(`${deduction.toLocaleString()} DA automatically vaulted for "${goal.name}"`);
-                  await new Promise(r => setTimeout(r, 1500));
+                  cashToAddToLiquid -= actualDeduction;
+                  totalDiverted += actualDeduction;
                 }
               }
             }
           }
         }
 
+        if (totalDiverted > 0) {
+          setDeductionNotice(`${totalDiverted.toLocaleString()} DA diverted to your Vault goals.`);
+          // Pause slightly so user can read the notice
+          await new Promise(r => setTimeout(r, 1200));
+        }
+
         await updateLiquidCash(user.id, cashToAddToLiquid);
-        const { error: incomeInsertError } = await supabase.from('incomes').insert([{ 
+        await supabase.from('incomes').insert([{ 
           user_id: user.id, 
           amount: amt, 
           source: formData.source, 
           date: formData.date 
         }]);
-        if (incomeInsertError) throw incomeInsertError;
 
       } 
       else if (type === 'expense') {
@@ -152,7 +163,6 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         const amt = parseFloat(formData.amount);
         let pId = formData.person_id;
         
-        // If no ID is selected but a name is typed, create a new person
         if (!pId && personSearch) {
           const { data: newPerson, error: pErr } = await supabase
             .from('people')
@@ -161,22 +171,21 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
           if (pErr) throw pErr;
           pId = newPerson?.id;
         } else if (!pId) {
-          throw new Error("Please specify a counterparty name.");
+          throw new Error("Counterparty required.");
         }
 
         const adjustment = formData.debt_type === 'owe_me' ? -amt : amt;
         await updateLiquidCash(user.id, adjustment);
-        const { error: dbtErr } = await supabase.from('debts').insert([{ 
+        await supabase.from('debts').insert([{ 
           user_id: user.id, 
           person_id: pId, 
           amount: amt, 
           type: formData.debt_type, 
           date: formData.date 
         }]);
-        if (dbtErr) throw dbtErr;
       }
       else if (type === 'savings_goal') {
-        const { error: goalError } = await supabase.from('savings_goals').insert([{
+        await supabase.from('savings_goals').insert([{
           user_id: user.id,
           name: formData.goal_name,
           target_amount: parseFloat(formData.target_amount),
@@ -184,14 +193,14 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
           frequency: formData.frequency,
           saved_amount: 0,
           status: 'active',
-          start_date: new Date().toISOString()
+          start_date: new Date().toISOString(),
+          last_deduction_date: null
         }]);
-        if (goalError) throw goalError;
       }
 
       onSuccess();
     } catch (err: any) {
-      console.error("Drahmi Database Error:", err);
+      console.error("Drahmi Error:", err);
       alert("Command Failed: " + (err.message || "Unknown error"));
     } finally {
       setLoading(false);
@@ -206,7 +215,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-2xl font-black tracking-tighter text-white capitalize">{type.replace('_', ' ')}</h2>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Wealth Protocol</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Wealth Command</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 glass rounded-full text-slate-500 hover:text-white flex items-center justify-center interactive-active">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -215,7 +224,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
 
         {deductionNotice && (
           <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-fade-in text-center">
-            <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">✨ Auto-Save Protocol</p>
+            <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">✨ Auto-Vault Active</p>
             <p className="text-white text-xs font-bold mt-1">{deductionNotice}</p>
           </div>
         )}
@@ -224,25 +233,25 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
           {type === 'savings_goal' ? (
             <div className="space-y-5">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Objective Name</label>
-                <input required type="text" placeholder="e.g. New Studio" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none focus:border-blue-500/50" value={formData.goal_name} onChange={e => setFormData({...formData, goal_name: e.target.value})} />
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Asset Name</label>
+                <input required type="text" placeholder="e.g. Emergency Fund" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none focus:border-blue-500/50" value={formData.goal_name} onChange={e => setFormData({...formData, goal_name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Target Total (DA)</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Final Target (DA)</label>
                   <input required type="number" placeholder="Sum" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.target_amount} onChange={e => setFormData({...formData, target_amount: e.target.value})} />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Cadence</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Frequency</label>
                   <select className="w-full h-14 glass rounded-2xl px-5 text-white outline-none bg-slate-900" value={formData.frequency} onChange={e => setFormData({...formData, frequency: e.target.value as any})}>
-                    <option value="daily">Daily Save</option>
-                    <option value="monthly">Monthly Save</option>
+                    <option value="daily">Daily Saving</option>
+                    <option value="monthly">Monthly Saving</option>
                   </select>
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Recurring Amount (DA)</label>
-                <input required type="number" placeholder="Auto-deduct amount" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.recurring_amount} onChange={e => setFormData({...formData, recurring_amount: e.target.value})} />
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Recurring Amt (DA)</label>
+                <input required type="number" placeholder="Amount per cycle" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.recurring_amount} onChange={e => setFormData({...formData, recurring_amount: e.target.value})} />
               </div>
             </div>
           ) : (
@@ -256,14 +265,14 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
                 {type === 'income' && (
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Capital Source</label>
-                    <input required type="text" placeholder="Salary, Project, Sale..." className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} />
+                    <input required type="text" placeholder="Salary, Side-hustle..." className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} />
                   </div>
                 )}
                 {type === 'expense' && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Item</label>
-                      <input required type="text" placeholder="Coffee, Rent..." className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                      <input required type="text" placeholder="Description" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Sector</label>
@@ -276,14 +285,14 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
                 {type === 'debt' && (
                   <div className="space-y-4">
                     <div className="space-y-2 relative">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Counterparty Name</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Counterparty</label>
                       <input 
-                        required type="text" placeholder="Search existing or type new..." 
+                        required type="text" placeholder="Name" 
                         className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" 
                         value={personSearch} 
                         onChange={e => {
                           setPersonSearch(e.target.value);
-                          setFormData({...formData, person_id: ''}); // If typing, reset ID
+                          setFormData({...formData, person_id: ''});
                         }} 
                       />
                       {personSearch && formData.person_id === '' && filteredPeople.length > 0 && (
@@ -304,14 +313,14 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'owe_me'})} className={`h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debt_type === 'owe_me' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'glass text-slate-500'}`}>Lent (They Owe Me)</button>
-                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'i_owe'})} className={`h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debt_type === 'i_owe' ? 'bg-rose-600 text-white shadow-xl shadow-rose-500/20' : 'glass text-slate-500'}`}>Borrowed (I Owe Them)</button>
+                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'owe_me'})} className={`h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debt_type === 'owe_me' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'glass text-slate-500'}`}>Lent</button>
+                      <button type="button" onClick={() => setFormData({...formData, debt_type: 'i_owe'})} className={`h-14 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debt_type === 'i_owe' ? 'bg-rose-600 text-white shadow-xl shadow-rose-500/20' : 'glass text-slate-500'}`}>Borrowed</button>
                     </div>
                   </div>
                 )}
                 {type !== 'cash' && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Event Date</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Log Date</label>
                     <input required type="date" className="w-full h-14 glass rounded-2xl px-5 text-white outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
                   </div>
                 )}
@@ -321,7 +330,7 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
 
           <div className="pt-4">
             <button type="submit" disabled={loading} className="w-full h-16 bg-white text-slate-950 font-black text-sm rounded-2xl shadow-2xl hover:bg-slate-200 disabled:opacity-50 uppercase tracking-[0.2em] transition-all interactive-active">
-              {loading ? 'Processing Protocol...' : 'Confirm Transaction'}
+              {loading ? 'Executing...' : 'Confirm Entry'}
             </button>
           </div>
         </form>
