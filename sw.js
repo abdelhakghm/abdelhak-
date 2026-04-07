@@ -14,9 +14,7 @@ const STATIC_ASSETS = [
   '/components/Modal.tsx',
   '/components/TransactionList.tsx',
   'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap',
-  'https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-192.png',
-  'https://jwcvbgfuktoqqzkqsnec.supabase.co/storage/v1/object/public/assets/icon-512.png'
+  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap'
 ];
 
 // Install event - precache core shell
@@ -72,7 +70,7 @@ self.addEventListener('fetch', (event) => {
            url.host === 'cdn.tailwindcss.com' || 
            url.host === 'fonts.googleapis.com' || 
            url.host === 'fonts.gstatic.com' ||
-           url.host === 'jwcvbgfuktoqqzkqsnec.supabase.co')
+           url.host.includes('supabase.co'))
         ) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {

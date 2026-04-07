@@ -22,18 +22,14 @@ const TransactionList: React.FC<TransactionListProps> = ({ title, incomes, expen
     if (!window.confirm('Erase this record from history?')) return;
     
     setDeletingId(id);
-    const table = type === 'income' ? 'incomes' : 'expenses';
+    const tableName = type === 'income' ? 'incomes' : 'expenses';
     
     try {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from(tableName).delete().eq('id', id);
       if (error) throw error;
       onRefresh();
     } catch (err: any) {
-      alert('Delete failed: ' + (err.message || 'Unknown error'));
+      alert('Delete failed: ' + err.message);
     } finally {
       setDeletingId(null);
     }

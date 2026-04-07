@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Person, SavingsGoal } from '../types';
 
@@ -34,29 +34,33 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
   );
 
   const updateLiquidCash = async (userId: string, adjustment: number) => {
-    const { data: currentCash, error: fetchError } = await supabase
-      .from('cash')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (fetchError) throw fetchError;
-
-    if (currentCash) {
-      const newAmount = Math.max(0, Number(currentCash.amount) + adjustment);
-      const { error: updateError } = await supabase
+    try {
+      const { data: currentCash } = await supabase
         .from('cash')
-        .update({ 
-          amount: newAmount,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', currentCash.id);
-      if (updateError) throw updateError;
-    } else {
-      const { error: insertError } = await supabase
-        .from('cash')
-        .insert([{ user_id: userId, amount: Math.max(0, adjustment) }]);
-      if (insertError) throw insertError;
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (currentCash) {
+        const newAmount = Math.max(0, Number(currentCash.amount) + adjustment);
+        await supabase
+          .from('cash')
+          .update({ 
+            amount: newAmount,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', currentCash.id);
+      } else {
+        await supabase
+          .from('cash')
+          .insert({ 
+            user_id: userId, 
+            amount: Math.max(0, adjustment),
+            updated_at: new Date().toISOString()
+          });
+      }
+    } catch (error: any) {
+      console.error('Cash update error:', error.message);
     }
   };
 
@@ -66,7 +70,8 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
     setDeductionNotice(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error("User session not found.");
 
       if (type === 'income') {
@@ -76,17 +81,16 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         let totalDiverted = 0;
         
         // Auto-Save Protocol Logic
-        const { data: activeGoals, error: goalQueryError } = await supabase
+        const { data: activeGoals } = await supabase
           .from('savings_goals')
           .select('*')
-          .eq('status', 'active')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('status', 'active');
 
-        if (!goalQueryError && activeGoals && activeGoals.length > 0) {
+        if (activeGoals && activeGoals.length > 0) {
           const today = new Date();
-          const todayStr = today.toISOString().split('T')[0];
 
-          for (const goal of activeGoals as SavingsGoal[]) {
+          for (const goal of activeGoals) {
             const lastDate = goal.last_deduction_date ? new Date(goal.last_deduction_date) : new Date(goal.start_date);
             let isDue = false;
             let multiplier = 1;
@@ -99,7 +103,6 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
                 multiplier = diffDays;
               }
             } else {
-              // Monthly check
               const isSameMonth = lastDate.getMonth() === today.getMonth() && lastDate.getFullYear() === today.getFullYear();
               if (!isSameMonth) {
                 isDue = true;
@@ -109,22 +112,21 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
             if (isDue && Number(goal.monthly_amount) > 0) {
               const singleDeduction = Number(goal.monthly_amount);
               const totalRequired = singleDeduction * multiplier;
-              
-              // Only deduct if we have enough from this specific income
               const actualDeduction = Math.min(totalRequired, cashToAddToLiquid);
               
               if (actualDeduction > 0) {
                 const newSaved = Number(goal.saved_amount) + actualDeduction;
-                const { error: updGoalErr } = await supabase.from('savings_goals').update({
-                  saved_amount: newSaved,
-                  last_deduction_date: today.toISOString(),
-                  status: newSaved >= Number(goal.target_amount) ? 'completed' : 'active'
-                }).eq('id', goal.id);
+                await supabase
+                  .from('savings_goals')
+                  .update({
+                    saved_amount: newSaved,
+                    last_deduction_date: today.toISOString(),
+                    status: newSaved >= Number(goal.target_amount) ? 'completed' : 'active'
+                  })
+                  .eq('id', goal.id);
 
-                if (!updGoalErr) {
-                  cashToAddToLiquid -= actualDeduction;
-                  totalDiverted += actualDeduction;
-                }
+                cashToAddToLiquid -= actualDeduction;
+                totalDiverted += actualDeduction;
               }
             }
           }
@@ -132,31 +134,59 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
 
         if (totalDiverted > 0) {
           setDeductionNotice(`${totalDiverted.toLocaleString()} DA diverted to your Vault goals.`);
-          // Pause slightly so user can read the notice
           await new Promise(r => setTimeout(r, 1200));
         }
 
         await updateLiquidCash(user.id, cashToAddToLiquid);
-        await supabase.from('incomes').insert([{ 
-          user_id: user.id, 
-          amount: amt, 
-          source: formData.source, 
-          date: formData.date 
-        }]);
+        await supabase
+          .from('incomes')
+          .insert({ 
+            user_id: user.id, 
+            amount: amt, 
+            source: formData.source, 
+            date: formData.date,
+            created_at: new Date().toISOString()
+          });
 
       } 
       else if (type === 'expense') {
         const amt = parseFloat(formData.amount);
         await updateLiquidCash(user.id, -amt);
-        await supabase.from('expenses').insert([{ user_id: user.id, title: formData.title, amount: amt, category: formData.category, date: formData.date }]);
+        await supabase
+          .from('expenses')
+          .insert({ 
+            user_id: user.id, 
+            title: formData.title, 
+            amount: amt, 
+            category: formData.category, 
+            date: formData.date,
+            created_at: new Date().toISOString()
+          });
       } 
       else if (type === 'cash') {
         const amt = parseFloat(formData.amount);
-        const { data: existing } = await supabase.from('cash').select('*').eq('user_id', user.id).maybeSingle();
+        const { data: existing } = await supabase
+          .from('cash')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
         if (existing) {
-          await supabase.from('cash').update({ amount: amt, updated_at: new Date().toISOString() }).eq('id', existing.id);
+          await supabase
+            .from('cash')
+            .update({ 
+              amount: amt, 
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', existing.id);
         } else {
-          await supabase.from('cash').insert([{ user_id: user.id, amount: amt }]);
+          await supabase
+            .from('cash')
+            .insert({ 
+              user_id: user.id, 
+              amount: amt,
+              updated_at: new Date().toISOString()
+            });
         }
       } 
       else if (type === 'debt') {
@@ -164,11 +194,15 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
         let pId = formData.person_id;
         
         if (!pId && personSearch) {
-          const { data: newPerson, error: pErr } = await supabase
+          const { data: newPerson } = await supabase
             .from('people')
-            .insert([{ user_id: user.id, name: personSearch }])
-            .select().single();
-          if (pErr) throw pErr;
+            .insert({ 
+              user_id: user.id, 
+              name: personSearch,
+              created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
           pId = newPerson?.id;
         } else if (!pId) {
           throw new Error("Counterparty required.");
@@ -176,26 +210,32 @@ const Modal: React.FC<ModalProps> = ({ type, people, onClose, onSuccess }) => {
 
         const adjustment = formData.debt_type === 'owe_me' ? -amt : amt;
         await updateLiquidCash(user.id, adjustment);
-        await supabase.from('debts').insert([{ 
-          user_id: user.id, 
-          person_id: pId, 
-          amount: amt, 
-          type: formData.debt_type, 
-          date: formData.date 
-        }]);
+        await supabase
+          .from('debts')
+          .insert({ 
+            user_id: user.id, 
+            person_id: pId, 
+            amount: amt, 
+            type: formData.debt_type, 
+            date: formData.date,
+            created_at: new Date().toISOString()
+          });
       }
       else if (type === 'savings_goal') {
-        await supabase.from('savings_goals').insert([{
-          user_id: user.id,
-          name: formData.goal_name,
-          target_amount: parseFloat(formData.target_amount),
-          monthly_amount: parseFloat(formData.recurring_amount),
-          frequency: formData.frequency,
-          saved_amount: 0,
-          status: 'active',
-          start_date: new Date().toISOString(),
-          last_deduction_date: null
-        }]);
+        await supabase
+          .from('savings_goals')
+          .insert({
+            user_id: user.id,
+            name: formData.goal_name,
+            target_amount: parseFloat(formData.target_amount),
+            monthly_amount: parseFloat(formData.recurring_amount),
+            frequency: formData.frequency,
+            saved_amount: 0,
+            status: 'active',
+            start_date: new Date().toISOString(),
+            last_deduction_date: null,
+            created_at: new Date().toISOString()
+          });
       }
 
       onSuccess();

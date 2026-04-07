@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Income, Expense, Debt, Person, DashboardStats, SavingsGoal } from '../types';
@@ -77,46 +77,109 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState<'income' | 'expense' | 'debt' | 'cash' | 'savings_goal' | null>(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [{ data: cash }, { data: inc }, { data: exp }, { data: dbt }, { data: ppl }, { data: gls }] = await Promise.all([
-        supabase.from('cash').select('*').maybeSingle(),
-        supabase.from('incomes').select('*').order('date', { ascending: false }),
-        supabase.from('expenses').select('*').order('date', { ascending: false }),
-        supabase.from('debts').select('*, people(*)').order('date', { ascending: false }),
-        supabase.from('people').select('*').order('name', { ascending: true }),
-        supabase.from('savings_goals').select('*').order('created_at', { ascending: false })
-      ]);
+  const fetchData = async () => {
+    if (!user) return;
 
-      const totalCash = cash?.amount ? Number(cash.amount) : 0;
-      const totalIncome = inc?.reduce((a, b) => a + Number(b.amount), 0) || 0;
-      const totalExpenses = exp?.reduce((a, b) => a + Number(b.amount), 0) || 0;
-      const totalOwedToMe = dbt?.filter(d => d.type === 'owe_me').reduce((a, b) => a + Number(b.amount), 0) || 0;
-      const totalIOwe = dbt?.filter(d => d.type === 'i_owe').reduce((a, b) => a + Number(b.amount), 0) || 0;
-      const totalSavings = gls?.reduce((a, b) => a + Number(b.saved_amount), 0) || 0;
+    // Fetch Cash
+    const { data: cashData } = await supabase
+      .from('cash')
+      .select('amount')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    setStats(prev => ({ ...prev, totalCash: cashData?.amount || 0 }));
 
-      setStats({
-        totalCash, totalIncome, totalExpenses, totalOwedToMe, totalIOwe, totalSavings,
-        netBalance: totalCash + totalOwedToMe - totalIOwe + totalSavings,
-      });
-      setIncomes(inc || []); setExpenses(exp || []); setDebts(dbt || []); setPeople(ppl || []); setGoals(gls || []);
-    } catch (e) { 
-      console.warn("Drahmi fetch error:", e); 
-    } finally { 
-      setLoading(false); 
+    // Fetch Incomes
+    const { data: incomeData } = await supabase
+      .from('incomes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+    if (incomeData) {
+      setIncomes(incomeData);
+      const total = incomeData.reduce((a, b) => a + Number(b.amount), 0);
+      setStats(prev => ({ ...prev, totalIncome: total }));
     }
-  }, [user.id]);
+
+    // Fetch Expenses
+    const { data: expenseData } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+    if (expenseData) {
+      setExpenses(expenseData);
+      const total = expenseData.reduce((a, b) => a + Number(b.amount), 0);
+      setStats(prev => ({ ...prev, totalExpenses: total }));
+    }
+
+    // Fetch People
+    const { data: peopleData } = await supabase
+      .from('people')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name', { ascending: true });
+    if (peopleData) setPeople(peopleData);
+
+    // Fetch Debts
+    const { data: debtData } = await supabase
+      .from('debts')
+      .select('*, person:people(*)')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+    if (debtData) {
+      setDebts(debtData);
+      const owedToMe = debtData.filter(d => d.type === 'owe_me').reduce((a, b) => a + Number(b.amount), 0);
+      const iOwe = debtData.filter(d => d.type === 'i_owe').reduce((a, b) => a + Number(b.amount), 0);
+      setStats(prev => ({ ...prev, totalOwedToMe: owedToMe, totalIOwe: iOwe }));
+    }
+
+    // Fetch Goals
+    const { data: goalData } = await supabase
+      .from('savings_goals')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (goalData) {
+      setGoals(goalData);
+      const total = goalData.reduce((a, b) => a + Number(b.saved_amount), 0);
+      setStats(prev => ({ ...prev, totalSavings: total }));
+    }
+
+    setLoading(false);
+  };
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+
+    // Real-time subscriptions
+    const channel = supabase
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash', filter: `user_id=eq.${user.id}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes', filter: `user_id=eq.${user.id}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: `user_id=eq.${user.id}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'debts', filter: `user_id=eq.${user.id}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'savings_goals', filter: `user_id=eq.${user.id}` }, fetchData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id]);
+
+  useEffect(() => {
+    setStats(prev => ({
+      ...prev,
+      netBalance: prev.totalCash + prev.totalOwedToMe - prev.totalIOwe + prev.totalSavings
+    }));
+  }, [stats.totalCash, stats.totalOwedToMe, stats.totalIOwe, stats.totalSavings]);
 
   const resetCash = async () => {
     if (!window.confirm('Reset liquid cash to 0.00 DA?')) return;
     try {
-      const { error } = await supabase.from('cash').update({ amount: 0 }).eq('user_id', user.id);
-      if (error) throw error;
-      fetchData();
+      await supabase
+        .from('cash')
+        .update({ amount: 0, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id);
     } catch (err: any) {
       alert('Reset failed: ' + err.message);
     }
@@ -124,16 +187,20 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   const deleteGoal = async (id: string) => {
     if (!window.confirm('Dissolve this savings goal?')) return;
-    const { error } = await supabase.from('savings_goals').delete().eq('id', id);
-    if (error) alert('Error: ' + error.message);
-    else fetchData();
+    try {
+      await supabase.from('savings_goals').delete().eq('id', id);
+    } catch (error: any) {
+      alert('Delete failed: ' + error.message);
+    }
   };
 
   const deleteDebt = async (id: string) => {
     if (!window.confirm('Clear this debt record?')) return;
-    const { error } = await supabase.from('debts').delete().eq('id', id);
-    if (error) alert('Error: ' + error.message);
-    else fetchData();
+    try {
+      await supabase.from('debts').delete().eq('id', id);
+    } catch (error: any) {
+      alert('Delete failed: ' + error.message);
+    }
   };
 
   const TabItem = ({ view, label, icon: Icon }: { view: View, label: string, icon: any }) => (
@@ -360,7 +427,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         <TabItem view="settings" label="Profile" icon={Icons.Profile} />
       </nav>
 
-      {activeModal && <Modal type={activeModal} people={people} onClose={() => setActiveModal(null)} onSuccess={() => { setActiveModal(null); fetchData(); }} />}
+      {activeModal && <Modal type={activeModal} people={people} onClose={() => setActiveModal(null)} onSuccess={() => setActiveModal(null)} />}
     </div>
   );
 };

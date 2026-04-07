@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
+import { User } from '@supabase/supabase-js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
-import { User } from '@supabase/supabase-js';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -11,30 +11,19 @@ const App: React.FC = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false);
-      checkUser();
-    };
+    const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    const checkUser = async () => {
-      try {
-        // Get session from persistent storage
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) console.warn("Session check error:", error);
-        setUser(session?.user ?? null);
-      } catch (err) {
-        console.error("Auth session exception:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
-    checkUser();
-
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);

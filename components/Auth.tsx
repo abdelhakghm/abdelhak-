@@ -13,7 +13,10 @@ const Auth: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) throw error;
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message });
@@ -27,9 +30,12 @@ const Auth: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Account created! Check your email.' });
+      setMessage({ type: 'success', text: 'Account created! Check your email for confirmation.' });
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message });
     } finally {
