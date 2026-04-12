@@ -5,14 +5,7 @@ const OFFLINE_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/index.tsx',
   '/manifest.json',
-  '/lib/supabase.ts',
-  '/types.ts',
-  '/components/Auth.tsx',
-  '/components/Dashboard.tsx',
-  '/components/Modal.tsx',
-  '/components/TransactionList.tsx',
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap'
 ];
